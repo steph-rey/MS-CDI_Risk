@@ -1,5 +1,5 @@
 ---
-title: "vars_for_logreg_model_CDIrisk"
+title: "Prepare Data for CDI Risk Assessment Model"
 author: "Steph Reynolds"
 date: "`r format(Sys.time(), '%b %d, %Y  %H:%M %p')`"
 output:
@@ -29,7 +29,8 @@ library(tidyverse)
 library(psych)
 library(lubridate)
 library(tableone)
-library(kableExtra)
+library(DT)
+#library(kableExtra)
 ```
 
 # Import data (only first 5000 lines)

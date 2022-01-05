@@ -19,3 +19,9 @@ rsconnect/
 
 # Ignore all data files
 data/
+
+# Ignore files with extension .pdf or .html generated from markdown
+# Only need to save .Rmd files 
+*.html
+*.pdf
+

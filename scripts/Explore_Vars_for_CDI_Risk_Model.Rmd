@@ -1,0 +1,55 @@
+---
+title: "Explore Variables for CDI Risk Model"
+author: "Steph Reynolds"
+date: "`r format(Sys.time(), '%b %d, %Y  %H:%M %p')`"
+output:
+  html_document:
+    toc: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+
+# Load packages
+```{r Load packages} 
+library(readr)
+library(tidyverse)
+library(DT)
+```
+
+# Import data
+```{r Import data }
+dm <- read_csv("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/dm.csv")
+
+dx <- read_csv("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/dx.csv")
+
+lab <- read_csv("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/lab.csv")
+
+med_admin <- read_csv("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/med_admin.csv")
+
+```
+
+# Explore demographics and events data
+```{r Explore dm table}
+datatable(dm)
+```
+
+# Explore diagnoses data
+```{r Explore dx table}
+datatable(dx)
+```
+
+# Explore lab results data
+```{r Explore lab table}
+datatable(lab)
+```
+
+# Explore med admin data
+```{r Explore med_admin table}
+datatable(med_admin)
+```
+
+
