@@ -1,0 +1,117 @@
+---
+title: "Clean Data for CDI Risk Assessment Model"
+author: "Steph Reynolds"
+date: "`r format(Sys.time(), '%b %d, %Y  %H:%M %p')`"
+output:
+  pdf_document:
+    toc: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+# Background
+
+## Project 
+MINDSCAPE: Modeling of infectious network dynamics for surveillance, control and prevention enhancement
+
+## Description 
+This file imports the first n=5000 lines of the following data, then cleans each dataset for next steps (exploration).
+  * Demographics and events (dm)
+  * Lab results (lab)
+  * Diagnoses (dx)
+  * Medication administration (med_admin)
+
+# Load packages 
+```{r Load packages}
+# Load required packages 
+#library(here)
+library(readr)
+library(tidyverse)
+library(psych)
+library(lubridate)
+library(tableone)
+library(DT)
+#library(kableExtra)
+```
+
+# Import data (only first 5000 lines)
+```{r Read in data}
+dm <- read_delim("/Users/sreynolds2/Downloads/ucsf_data_pull_11.08.21/demographics and event table 11.08.21.csv", delim = "|")
+
+# lab <- read_delim("/Users/sreynolds2/Downloads/ucsf_data_pull_11.08.21/lab results 11.08.21.csv", delim = "|", n_max = 5000)
+
+# dx <- read_delim("/Users/sreynolds2/Downloads/ucsf_data_pull_11.08.21/covid diagnoses 11.08.21.csv", delim = "|", n_max = 5000)
+
+med_admin <- read_delim("/Users/sreynolds2/Downloads/ucsf_data_pull_11.08.21/med admin table 11.08.21.csv", delim = "|")
+
+```
+
+# Demographics and events table
+```{r Demographics and events table - clean and generate categorical frequency table}
+# Clean `dm` data
+dm <- dm %>% 
+  select(deid_enc_id, age, sex, pat_race, ethnicity, smoking, BMI, covid_pos, readmit, HAI_pathogen, HAI_type, HAI_first_date, ED_dispo, present_source, admit_time) %>% 
+  rename(ID = deid_enc_id, 
+         race = pat_race) %>% 
+  mutate_at(c("sex", "race", "ethnicity", "smoking", "covid_pos", "readmit", "ED_dispo", "present_source", "HAI_type"), factor) %>% 
+  mutate_at(c("admit_time", "HAI_first_date"), ymd_hms) %>% 
+  mutate_at("BMI", as.numeric)
+
+# Create frequency table for `dm`
+CreateCatTable(data = dm, vars = c("sex", "race", "ethnicity", "smoking", "covid_pos", "readmit", "ED_dispo", "present_source", "HAI_type"))
+
+```
+
+# Diagnoses table 
+```{r Diagnoses table - clean and generate categorical frequency table, eval = FALSE}
+# Clean `dx` data
+dx <- dx %>% 
+  select(deid_enc_id, dx_group, DX_NAME, present_on_admit, severity_of_dx, co_morbidity) %>% 
+  mutate_at(c("dx_group", "DX_NAME", "present_on_admit", "severity_of_dx", "co_morbidity"), factor)
+
+# Create frequency table for `dx` 
+CreateCatTable(data = dx, vars = c("dx_group", "DX_NAME", "present_on_admit", "severity_of_dx", "co_morbidity"))
+
+```
+
+# Lab results table
+```{r Lab results table - clean and generate categorical frequency table, eval = FALSE}
+# Clean `lab` data
+lab <- lab %>%
+  select(deid_enc_id, COMMON_NAME, ORD_VALUE, Abnormal, order_time, RESULT_TIME, lab_concept) %>% 
+  mutate_at(c("COMMON_NAME", "Abnormal", "lab_concept"), factor) %>% 
+  mutate_at("ORD_VALUE", as.numeric)
+
+# Create frequency table for `lab` 
+CreateCatTable(data = lab, vars = c("COMMON_NAME", "Abnormal", "lab_concept"))
+
+```
+
+# Med admin table
+```{r Med admin table - clean and generate categorical frequency table}
+# Clean `med_admin` table 
+med_admin <- med_admin %>% 
+  select(deid_enc_id, name, thera_class, pharm_class, pharm_subclass, taken_time) %>% 
+  rename(ID = deid_enc_id, 
+         med_name = name) %>%
+  mutate_at(c("med_name", "thera_class", "pharm_class", "pharm_subclass"), factor)
+
+# Create frequency table for `med_admin`
+CreateCatTable(data = med_admin, vars = c("med_name", "thera_class", "pharm_class", "pharm_subclass")) 
+
+```
+
+# Save all data 
+```{r Save data as .csv files}
+write_csv(dm, file = "/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/dm.csv")
+
+# write_csv(lab, file = "/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/lab.csv")
+
+# write_csv(dx, file = "/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/dx.csv")
+
+write_csv(med_admin, file = "/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/med_admin.csv")
+
+```
