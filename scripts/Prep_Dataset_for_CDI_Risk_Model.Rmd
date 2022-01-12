@@ -23,19 +23,18 @@ This file reads in necessary data and identifies variables of interest for build
   * `ID` --> each patient's unique de-identified encounter ID 
   * `readmit` --> whether patient had a prior hospital admission in the last 30 days
   * `ED_dispo` --> whether pt was admitted from Emergency Dept (ED) ???
-    - UNCLEAR! VERIFY / LEO WHAT THIS SHOULD BE TO INDICATE THAT PT WAS ADMITTED TO ED!
+    - NOTE: UNCLEAR! VERIFY / LEO WHAT THIS SHOULD BE TO INDICATE THAT PT WAS ADMITTED TO ED!
   * `age_gte_65` --> whether pt is aged 65 years or older at time of hospitalization
   * `PPI` --> whether pt received proton pump inhibitor (PPI) during hospital stay
   * `GAS` --> whether pt received gastric acid suppressants and laxatives (GAS) during hospital stay
-    - This includes "ANTACIDS", "LAXATIVES AND CATHARTICS", and "LAXATIVES, LOCAL/RECTAL"
+    - NOTE: This includes "ANTACIDS", "LAXATIVES AND CATHARTICS", and "LAXATIVES, LOCAL/RECTAL"
   * `ABX` --> whether pt received antibiotics during hospital stay 
-    - NOTE: THIS DOES NOT INCLUDE OUTPATIENT ABS - ONLY THOSE DURING HOSPITALIZATION. 
+    - NOTE: THIS DOES NOT INCLUDE OUTPATIENT ABX - ONLY THOSE DURING HOSPITALIZATION. 
   * `DBM` --> whether pt is diagnosed with diabetes mellitus (DBM) 
-    - NOTE: ONLY HAVE DBM DX INFO FROM 1,210 PTS.
+    - NOTE: DO NOT USE! ONLY HAVE DBM DX FOR COVID POSITIVE PTS.
 
 # Load required packages 
-```{r Load packages}
-# Load required packages 
+```{r Load required packages}
 library(readr)
 library(tidyverse)
 library(lubridate)
@@ -44,7 +43,7 @@ library(kableExtra)
 library(DT)
 ```
 
-# Import `dm` and `med_admin` tables 
+# Import `dm`, `med`, and `dx` tables 
 ```{r Import data}
 dm <- read_delim("/Users/sreynolds2/Downloads/ucsf_data_pull_11.08.21/demographics and event table 11.08.21.csv", delim = "|")
 

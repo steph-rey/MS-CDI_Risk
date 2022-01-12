@@ -1,0 +1,124 @@
+---
+title: "Build Logistic Regression Model for CDI Risk"
+author: "Steph Reynolds"
+date: "`r format(Sys.time(), '%b %d, %Y  %H:%M %p')`"
+output:
+  html_document:
+    toc: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+# Background
+
+## Project 
+MINDSCAPE: Modeling of infectious network dynamics for surveillance, control and prevention enhancement
+
+## Description 
+This file reads in `df.CDI` and checks the assumptions for creating a logistic regression model to evaluate C diff risk among hospitalized patients.
+
+## Outcome/Dependent Variable:
+*Outcome is binary.*
+
+  * `cdif_gt_2_days` --> whether patient is diagnosed with C difficile > 2 days after hospital admission (binary)
+
+## Predictor/Independent Variables:
+*All predictors are binary.*
+
+  * `readmit` --> whether patient had a prior hospital admission in the last 30 days
+  * `age_gte_65` --> whether pt is aged 65 years or older at time of hospitalization
+  * `PPI` --> whether pt received proton pump inhibitor (PPI) during hospital stay
+  * `GAS` --> whether pt received gastric acid suppressants and laxatives (GAS) during hospital stay
+    - NOTE: This includes "ANTACIDS", "LAXATIVES AND CATHARTICS", and "LAXATIVES, LOCAL/RECTAL"
+  * `ABX` --> whether pt received antibiotics during hospital stay 
+    - NOTE: THIS DOES NOT INCLUDE OUTPATIENT ABX - ONLY THOSE DURING HOSPITALIZATION.
+  * THINK ABOUT INCLUDING THESE LATER!!!
+    - `ED_dispo` --> whether pt was admitted from Emergency Dept (ED) ???
+      + NOTE: UNCLEAR! VERIFY / LEO WHAT THIS SHOULD BE TO INDICATE THAT PT WAS ADMITTED TO ED.
+    - `DBM` --> whether pt is diagnosed with diabetes mellitus (DBM) 
+      + NOTE: DO NOT USE! ONLY HAVE DBM DX FOR COVID POSITIVE PTS.
+
+# Load required packages 
+```{r Load required packages}
+library(readr)
+library(tidyverse)
+library(corrplot) #correlation matrix to test multi-collinearity of IVs 
+library(pROC) #plot ROC and calculate AUROC (to evaluate performance of model)
+```
+
+# Import `df_CDI_risk_model.csv` and assign to `df`
+```{r Import data}
+df <- read_csv("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/df_CDI_risk_model.csv")
+```
+
+# Create dataset with only relevant parameters (readmit, age, cdif, ppi, gas, abx)
+```{r Select parameters}
+df <- df %>% 
+  select_if(is.numeric) %>% 
+  select(-DBM)
+```
+
+# Check Assumptions of Logistic Regression
+**Source: https://www.lexjansen.com/wuss/2018/130_Final_Paper_PDF.pdf**
+
+## Appropriate Outcome Structure 
+Binary log reg requires DV to be binary. Whether a pt is diagnosed with C diff is binary.
+
+## Observation Independence
+Observations are independent from each other. Each patient is unique. Not matched or repeated measures data. 
+
+## Absence of Multicollinearity
+There should be little or no multicollinearity among IVs. We can test this assumption with a correlation matrix. Make sure no two variables have a correlation coefficient of roughly 0.8 or higher.
+
+### Correlation matrix 
+```{r Correlation matrix}
+# Create correlation matrix to check whether indep vars are correlated with each other
+corrplot(cor(df), method = 'number', type = 'lower') 
+
+# As per matrix, the data meets the assumption of absence of multicollinearity. The IVs are not highly correlated with each other. 
+```
+
+## Linearity of Independent Variables and Log Odds
+Continuous IVs must be linearly related to the logit of the outcome. We can test this by visualizing scatterplot between each predictor and logit values. Since all IVs are binary, can ignore.
+
+## Large Sample Size
+General guideline is to have at least 10 cases with least frequent outcome for each IV/predictor variable in your model.
+
+Since our model will include 5 predictors and the probability of Cdiff is 101/54955 (.0018), then we would like a sample size of about 28000 (10*5/.0018).
+
+# Build logistic regression model 
+```{r Build logistic regression model}
+model <- glm(data = df, formula = cdif_gt_2_days ~ readmit + age_gte_65 + PPI + GAS + ABX, family = binomial)
+
+summary(model)
+```
+
+Since our model suggests `ABX` to be the least significant predictor, we will re-run this model WITHOUT it.
+
+```{r Build log reg model 2}
+model2 <- glm(data = df, formula = cdif_gt_2_days ~ readmit + age_gte_65 + PPI + GAS, family = binomial)
+
+summary(model2)
+```
+
+Since all predictors were significant (p<=.05), we can keep model 2 and evaluate its performance by calculating the area under the receiving operator curve (AUROC or AUC).
+
+# Calculate AUROC to evaluate model 2 performance 
+```{r Calculate AUROC}
+logit_prob <- predict(model2, newdata = df, type = 'response')
+
+logit_roc <- pROC::roc(df$cdif_gt_2_days ~ logit_prob, plot = T, print.auc = T)
+```
+
+The AUROC is 0.74 which shows that the model is moderately accurate at predicting whether a patient will be diagnosed with C diff given the following risk factors (age>=65, readmit, received PPI, received gastric acid supp or laxative, received abx). 
+
+```{r Previous code attempts, disregard for now, echo=F, eval=F}
+#prob_thresh <- 0.8
+#logit_data <- df %>% add_column(logit_prob)
+#logit_plot <- plot(logit_data)
+```
+
+# End of Document 
