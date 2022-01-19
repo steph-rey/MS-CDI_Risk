@@ -43,7 +43,6 @@ This file reads in `df.CDI` and checks the assumptions for creating a logistic r
 
 # Load required packages 
 ```{r Load required packages}
-library(readr)
 library(tidyverse)
 library(corrplot) #correlation matrix to test multi-collinearity of IVs 
 library(pROC) #plot ROC and calculate AUROC (to evaluate performance of model)
