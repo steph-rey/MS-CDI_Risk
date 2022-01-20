@@ -72,8 +72,8 @@ model_performance(model_fit_glm)
     vip(num_features = 5,
         geom = "point",
         aes = list(size = 3, color = '18bc9c')) + 
-    theme_minimal(base_size = 16) + 
-    labs(title = "Logistic Regression: Feature Importance ")
+    theme_minimal(base_size = 15) + 
+    labs(title = "Logistic Regression: Feature Importance")
     # Features with highest importance are: PPI and GAS 
 
   # Visualize top features
