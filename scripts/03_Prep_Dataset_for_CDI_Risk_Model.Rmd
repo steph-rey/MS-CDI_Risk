@@ -62,56 +62,67 @@ dm <- dm %>%
   mutate(age_gte_65 = if_else(age>=65, 1, 0),
          readmit = if_else(readmit=="Yes", 1, 0),
          cdif = if_else(HAI_type=="CDIF", 1, 0),
-         gt_2_days = if_else((difftime(HAI_first_date, admit_time, units = "days")) > 2, 1, 0),
+         HAI_gt_2_days = if_else((difftime(HAI_first_date, admit_time, units = "days")) > 2, 1, 0),
          # Add column to indicate whether CDIFF dx was > 2 days of admission
-         cdif_gt_2_days = if_else(cdif==1 & gt_2_days==1, 1, 0)) %>% 
-  select(-c(age, HAI_type, HAI_first_date, admit_time, cdif, gt_2_days))
+         HACDIF = if_else(cdif==1 & HAI_gt_2_days==1, 1, 0)) %>% 
+  select(-c(age, HAI_type, admit_time, cdif, HAI_gt_2_days))
+
+# Filter to obtain table of pts who were diagnosed with hospital-acquired C diff (HACDIF)
+HA_cdif_pts <- dm %>% 
+  filter(HACDIF==1)
 ```
 
 # Clean `med` table - deselect unnecessary variables, change to appropriate variable type
-```{r Clean `med_admin` table}
+```{r Clean `med` table}
+# With med table, create new variables to indicate whether pt received PPI, GAS, and/or ABX
 med <- med %>% 
-  select(deid_enc_id, thera_class, pharm_class) %>% 
-  mutate_at(c("thera_class", "pharm_class"), factor) %>% 
-  mutate(PPI = if_else(pharm_class=="PROTON-PUMP INHIBITORS", 1, 0),
+  select(deid_enc_id, thera_class, pharm_class, taken_time) %>% 
+  mutate_at(c("thera_class", "pharm_class"), factor) %>%
+  mutate(PPI = if_else(pharm_class=="PROTON-PUMP INHIBITORS", 1, 0),    
          GAS = if_else(pharm_class %in% c("ANTACIDS", "LAXATIVES AND CATHARTICS", "LAXATIVES, LOCAL/RECTAL"), 1, 0),
          ABX = if_else(thera_class %in% c("ANTIBIOTICS", "ANTIFUNGALS", "ANTIINFECTIVES/MISCELLANEOUS", "ANTIPARASITICS", "ANTIVIRALS"), 1, 0)) %>% 
   select(-c(thera_class, pharm_class))
 
-med <- med %>% 
-  group_by(deid_enc_id) %>% 
-  summarize(Num_of_PPI = sum(PPI),
+# Create table to indicate whether pt received PPI, GAS, or ABX up to one day before HAI_first_date (aka when HACDIF was diagnosed)
+med_taken_before_HAI <- dm %>% 
+  inner_join(med, by = "deid_enc_id") %>%     # Join dm and med tables on ID
+  filter(taken_time < HAI_first_date) %>%     # Filter for where  taken_time (for PPI, ABX, or GAS) < HAI_first_date
+  group_by(deid_enc_id) %>%                   # Group by ID
+  summarize(Num_of_PPI = sum(PPI),            # Count total number of PPI, GAS, ABX up to day before HAI_first_date
             Num_of_GAS = sum(GAS),
             Num_of_ABX = sum(ABX)) %>% 
-  mutate(PPI = if_else(Num_of_PPI>=1, 1, 0),            # this transforms PPI, GAS, and ABX into binary vars
+  mutate(PPI = if_else(Num_of_PPI>=1, 1, 0),  # Transform to binary vars, indicating yes/no whether pt received PPI, GAS, or ABX
          GAS = if_else(Num_of_GAS>=1, 1, 0),
          ABX = if_else(Num_of_ABX>=1, 1, 0)) %>% 
-  select(deid_enc_id, PPI, GAS, ABX)
+  select(deid_enc_id, PPI, GAS, ABX)          # Only keep relevant variables
 
-# Instead of number of ... should this just be a binary variable indicating receipt of PPI/Gastric Acid Supplement/ABX (coded as 1=yes or 0=no)? Section commented above handles this. Can remove this chunk of code if decide it's better to have frequency counts for PPI/GAS/ABX. 
+# View table
+med_taken_before_HAI
+# Rather than number of PPI/GAS/ABX, should this just be a binary variable indicating receipt of PPI/GAS/ABX (coded as 1=yes or 0=no)? Section commented above handles this. Can remove this chunk of code if decide it's better to have frequency counts for PPI/GAS/ABX. 
 ```
 
 # Clean `dx` table - create table `dbm` to indicate diabetes mellitus (DBM) diagnoses
 ```{r Clean `dx` table, create table to indicates DBM dx}
 dbm <- dx %>% 
-  select(deid_enc_id, dx_group) %>% 
   mutate(DBM = if_else(dx_group=="DIABETES MELLITUS", 1, 0)) %>%
-  select(-dx_group) %>% 
   group_by(deid_enc_id) %>% 
   summarize(n_dbm = sum(DBM)) %>% 
   mutate(DBM = if_else(n_dbm>=1, 1, 0)) %>% 
   select(-n_dbm)
 
-#Note: Only have diabetes diagnosis (y/n) for 1,210 patients out of 54,955.
-
+sum(dbm$DBM)
+# 406 patients diagnosed with diabetes 
 ```
 
-# Join `dm`, `med`, and `dbm` table and assign to `df_._CDI`
+NOTE: Only have diabetes diagnoses for 1,210 out of 54,955 patients. Missing data on DBM diagnosis for ~97% of patients. Only have DBM data for Covid-positive patients. Checked demographics and events table, and diabetes dx not listed as variable. Would need Leo to re-pull data gathering diabetes dx for ALL patients. 
+
+# Join `dm`, `med`, and `dbm` tables and assign to `df_CDI`
 ```{r Merge all tables}
 df_CDI <- dm %>% 
-  inner_join(med, by = 'deid_enc_id') %>% 
-  left_join(dbm, by = "deid_enc_id") %>% 
-  rename(ID = deid_enc_id)
+  inner_join(med_taken_before_HAI, by = 'deid_enc_id') %>% 
+  left_join(dbm, by = "deid_enc_id") %>%          # Left join dm and dbm
+  mutate(DBM = ifelse(is.na(DBM), 0, DBM)) %>%    # If DBM=NA then assign 0, otherwise, leave as-is
+  rename(ID = deid_enc_id)                        # Rename to ID for convenience
 ```
 
 # Preview and explore resulting dataset
@@ -129,13 +140,24 @@ tableone <- CreateCatTable(data=df_CDI, vars=c("readmit", "ED_dispo", "age_gte_6
 
 print(tableone, showAllLevels = T, noSpaces = T)
 
-# Missing data on DBM diagnosis for ~97% of patients. 
 # For binary variables, 1 = YES and 0 = NO. 
 ```
 
 # Save resulting dataset `df_CDI` as .csv file 
 ```{r Save resulting dataset as .csv file}
 write_csv(df_CDI, "/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/df_CDI_risk_model.csv")
+```
+
+# Ctonigency tables
+```{r Contingency table and OR}
+table(df_CDI$HACDIF, df_CDI$age_gte_65)
+
+chisq.test(df_CDI$HACDIF, df_CDI$age_gte_65)
+# p-value < .05, thus, HACIF are NOT independent, aka they are related
+
+fisher.test(df_CDI$HACDIF, df_CDI$age_gte_65)
+# p-value < .05, thus, HACIF are NOT independent, aka they are related
+# OR=1.65, meaning patients that are 65 and older are 1.65x more likely to be diagnosed with HA-CDIF than those who are under 65 years old
 ```
 
 
@@ -150,9 +172,11 @@ write_csv(df_CDI, "/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/da
 # Idea of what next steps would look like... first have to normalize/transform data and meet assumptions of logistic regression... 
 
 # For example, first look at correlation between age >= 65 and c diff dx. 
-cor(df_CDI$age_gte_65, df_CDI$cdif_gt_2_days, use = "complete.obs", method = "kendall")
+cor(df_CDI$age_gte_65, df_CDI$HACDIF, use = "complete.obs", method = "kendall")
 
-m1 <- glm(cdif_gt_2_days ~ age_gte_65 + readmit + DBM + PPI + GAS + ABX, data = df_CDI, family = binomial)
+m1 <- glm(formula = HACDIF ~ age_gte_65 + PPI + GAS + ABX, 
+          data = df_CDI, 
+          family = binomial)
 
 summary(m1)
 ```
