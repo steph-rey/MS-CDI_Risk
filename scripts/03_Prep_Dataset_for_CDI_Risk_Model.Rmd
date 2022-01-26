@@ -143,42 +143,59 @@ print(tableone, showAllLevels = T, noSpaces = T)
 # For binary variables, 1 = YES and 0 = NO. 
 ```
 
-# Save resulting dataset `df_CDI` as .csv file 
-```{r Save resulting dataset as .csv file}
+# Save resulting dataset `df_CDI` as .csv file and rds object 
+```{r Save resulting dataset as CSV and RDS}
 write_csv(df_CDI, "/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/df_CDI_risk_model.csv")
+saveRDS(df_CDI, "/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/df_CDI_risk_model.rds")
 ```
 
-# Ctonigency tables
-```{r Contingency table and OR}
+# Create 2x2 contingency table for age and CDIF and compute OR 
+```{r Contingency table and OR for age and CDIF}
 table(df_CDI$HACDIF, df_CDI$age_gte_65)
 
 chisq.test(df_CDI$HACDIF, df_CDI$age_gte_65)
-# p-value < .05, thus, HACIF are NOT independent, aka they are related
+# p-value < .05, thus, HACIF and AGE are NOT independent, aka they are related
 
 fisher.test(df_CDI$HACDIF, df_CDI$age_gte_65)
 # p-value < .05, thus, HACIF are NOT independent, aka they are related
 # OR=1.65, meaning patients that are 65 and older are 1.65x more likely to be diagnosed with HA-CDIF than those who are under 65 years old
 ```
 
+# Create 2x2 contingency table for ABX and CDIF and compute OR 
+```{r Contingency table and OR for ABX and CDIF}
+table(df_CDI$HACDIF, df_CDI$ABX)
+
+chisq.test(df_CDI$HACDIF, df_CDI$ABX)
+# p-value < .05, thus, HACIF and ABX are DEPENDENT
+
+fisher.test(df_CDI$HACDIF, df_CDI$ABX)
+# OR=2.16, meaning patients who received ABX up to one day before HAI diagnosis are 2.16x more likely to be diagnosed with HA-CDIF than those who do not receive ABX
+```
+
+# Create 2x2 contingency table for GAS and CDIF and compute OR 
+```{r Contingency table and OR for GAS and CDIF}
+table(df_CDI$HACDIF, df_CDI$GAS)
+
+chisq.test(df_CDI$HACDIF, df_CDI$GAS)
+# p>0.05, thus, we fail to reject the null hyp -- HACIF and GAS are INDEPENDENT 
+
+fisher.test(df_CDI$HACDIF, df_CDI$GAS)
+# OR=1.13 but 95% CI includes 1 and p>.05, so cannot claim any meaningful extra odds with obtaining gastric acid supplement or laxatives in relation to HACDIF
+```
+
+# Create 2x2 contingency table for PPI and CDIF and compute OR 
+```{r Contingency table and OR for PPI and CDIF}
+table(df_CDI$HACDIF, df_CDI$PPI)
+
+chisq.test(df_CDI$HACDIF, df_CDI$PPI)
+# p<.05, thus, HACIF and PPI are DEPENDENT
+
+fisher.test(df_CDI$HACDIF, df_CDI$PPI)
+# OR=0.58, meaning patients who received a gastric acid supplement or laxative (GAS) up to one day before HAI diagnosis are 0.58x more likely to be diagnosed with HA-CDIF than those who do not receive GAS
+```
 
 # Next Steps 
 
   * Create multivariate logistic regression model, divide data into 3 chunks/time periods (e.g. 2019, 2020, 2021)
     + 1 chunk used to train model, the other 2 used to evaluate model performance (e.g. 2019 chunk used to train model, while 2020-2021 used to test model performance)
   * Evaluate "model creep" or how much the optimized model changes over time? 
-  * Question: What proportion of C diff cases occurred 2+ days after admission vs. within 2 days of admission? 
-
-```{r, eval = FALSE}
-# Idea of what next steps would look like... first have to normalize/transform data and meet assumptions of logistic regression... 
-
-# For example, first look at correlation between age >= 65 and c diff dx. 
-cor(df_CDI$age_gte_65, df_CDI$HACDIF, use = "complete.obs", method = "kendall")
-
-m1 <- glm(formula = HACDIF ~ age_gte_65 + PPI + GAS + ABX, 
-          data = df_CDI, 
-          family = binomial)
-
-summary(m1)
-```
-
-# End of Document

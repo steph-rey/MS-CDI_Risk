@@ -1,7 +1,7 @@
 # Logistic Regression with performance package
 
 # Install and load required packages ---- 
-install.packages("performance", dependencies = TRUE)
+# install.packages("performance", dependencies = TRUE)
 library(performance)
 library(tidyverse)
 library(dlookr)
@@ -12,21 +12,20 @@ df <- read_csv("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/
 # Create dataset with only relevant parameters (readmit, age, cdif, ppi, gas, abx) ---- 
 df <- df %>% 
   select_if(is.numeric) %>% 
-  select(-DBM) %>% 
-  rename(cdif = cdif_gt_2_days) %>% 
-  mutate_if(is.numeric, factor)
+  select(-DBM)
 
 # EDA with dlookr ---- 
 dlookr::diagnose_paged_report(df)
 
 # Build logistic regression models ----
   # m1 includes all parameters
-  m1 <- glm(data = df, formula = cdif ~ readmit + age_gte_65 + PPI + GAS + ABX, family = binomial)
+  m1 <- glm(data = df, formula = HACDIF ~ readmit + age_gte_65 + PPI + GAS + ABX, family = binomial)
   summary(m1)
+  model_performance(m1)
   
-  # m2 includes all parameters except for ABX 
-  # based on summary(m1), ABX was the least significant predictor (p=0.97)
-  m2 <- glm(data = df, formula = cdif ~ readmit + age_gte_65 + PPI + GAS, family = binomial)
+  # m2 includes all parameters except for GAS and READMIT
+  m2 <- glm(data = df, formula = HACDIF ~ age_gte_65 + PPI + ABX, family = binomial)
+  summary(m2)
 
 # Compare performance between m1 and m2 ----
 compare_performance(m1, m2, rank = T)
