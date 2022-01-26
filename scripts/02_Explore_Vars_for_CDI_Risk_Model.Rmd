@@ -24,12 +24,11 @@ library(DT)
 ```{r Import data }
 dm <- read_csv("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/dm.csv")
 
-dx <- read_csv("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/dx.csv")
+# dx <- read_csv("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/dx.csv")
 
-lab <- read_csv("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/lab.csv")
+# lab <- read_csv("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/lab.csv")
 
 med_admin <- read_csv("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/med_admin.csv")
-
 ```
 
 # Explore demographics and events data
@@ -38,12 +37,12 @@ datatable(dm)
 ```
 
 # Explore diagnoses data
-```{r Explore dx table}
+```{r Explore dx table, eval = F}
 datatable(dx)
 ```
 
 # Explore lab results data
-```{r Explore lab table}
+```{r Explore lab table, eval = F}
 datatable(lab)
 ```
 

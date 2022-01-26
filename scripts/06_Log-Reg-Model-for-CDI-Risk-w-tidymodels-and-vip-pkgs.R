@@ -11,8 +11,7 @@ df <- read_csv("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/
 # Create dataset with only relevant parameters (readmit, age, cdif, ppi, gas, abx) and convert to factor type ---- 
 df <- df %>% 
   select_if(is.numeric) %>% 
-  select(-DBM) %>% 
-  rename(cdif = cdif_gt_2_days) %>% 
+  select(-DBM) %>%  
   mutate_if(is.numeric, factor)
 
 # EDA with dlookr ---- 
@@ -33,7 +32,7 @@ df <- df %>%
 # Fit the model ----
 model_fit_glm <- logistic_reg() %>% 
   set_engine("glm") %>% 
-  fit(cdif ~ . , data = training(splits))
+  fit(HACDIF ~ . , data = training(splits))
 
 model_fit_glm
 
@@ -59,11 +58,11 @@ model_performance(model_fit_glm)
 
 # Evaluate model performance: AUC and ROC ----
   # Plot AUC 
-  results_tbl %>% roc_auc(cdif, .pred_0)
-  # AUC = 0.845
+  results_tbl %>% roc_auc(HACDIF, .pred_0)
+  # AUC = 0.619
   
   # Visualize ROC 
-  results_tbl %>% roc_curve(cdif, .pred_0) %>% 
+  results_tbl %>% roc_curve(HACDIF, .pred_0) %>% 
     autoplot()
 
 # Feature importance ----
@@ -74,15 +73,21 @@ model_performance(model_fit_glm)
         aes = list(size = 3, color = '18bc9c')) + 
     theme_minimal(base_size = 15) + 
     labs(title = "Logistic Regression: Feature Importance")
-    # Features with highest importance are: PPI and GAS 
+    # Features with highest importance are: PPI, AGE, and ABX
 
   # Visualize top features
-  df %>% ggplot(aes(cdif, PPI, color = GAS)) +
-    geom_jitter(alpha = 0.25) + 
+  df %>% ggplot(aes(HACDIF, age_gte_65, color = ABX)) +
+    geom_jitter(alpha = 0.3) + 
     theme_minimal(base_size = 16) +
     scale_color_viridis_d(end = 0.4) + 
-    labs(title = "Comparison of Predicted CDIF Diagnosis\nusing PPI and GAS as Key Predictors")
+    labs(title = "Comparison of Predicted CDIF Diagnosis\nusing AGE and ABX as Key Predictors")
 
-  
+  # Visualize top features
+  df %>% ggplot(aes(HACDIF, PPI, color = ABX)) +
+    geom_jitter(alpha = 0.3) + 
+    theme_minimal(base_size = 16) +
+    scale_color_viridis_d(end = 0.4) + 
+    labs(title = "Comparison of Predicted CDIF Diagnosis\nusing PPI and ABX as Key Predictors")
+
 # End of Document
 

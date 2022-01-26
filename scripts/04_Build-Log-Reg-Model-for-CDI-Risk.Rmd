@@ -23,7 +23,8 @@ This file reads in `df.CDI` and checks the assumptions for creating a logistic r
 ## Outcome/Dependent Variable:
 *Outcome is binary.*
 
-  * `cdif_gt_2_days` --> whether patient is diagnosed with C difficile > 2 days after hospital admission (binary)
+  * `HACDIF` --> whether patient is diagnosed with hospital- acquired C diff 
+    * In other words, whether pt obtained C diff > 2 days after hospital admission
 
 ## Predictor/Independent Variables:
 *All predictors are binary.*
@@ -51,6 +52,9 @@ library(pROC) #plot ROC and calculate AUROC (to evaluate performance of model)
 # Import `df_CDI_risk_model.csv` and assign to `df`
 ```{r Import data}
 df <- read_csv("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/df_CDI_risk_model.csv")
+
+# Alternatively: 
+# saveRDS(df_CDI, "/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/df_CDI_risk_model.rds")
 ```
 
 # Create dataset with only relevant parameters (readmit, age, cdif, ppi, gas, abx)
@@ -81,7 +85,7 @@ corrplot(cor(df), method = 'number', type = 'lower')
 ```
 
 ## Linearity of Independent Variables and Log Odds
-Continuous IVs must be linearly related to the logit of the outcome. We can test this by visualizing scatterplot between each predictor and logit values. Since all IVs are binary, can ignore.
+Continuous IVs must be linearly related to the logit of the outcome. We can test this by visualizing scatterplot between each predictor and logit values. Since all IVs are binary, can ignore this step.
 
 ## Large Sample Size
 General guideline is to have at least 10 cases with least frequent outcome for each IV/predictor variable in your model.
@@ -90,26 +94,26 @@ Since our model will include 5 predictors and the probability of Cdiff is 101/54
 
 # Build logistic regression model 
 ```{r Build logistic regression model}
-model <- glm(data = df, formula = cdif_gt_2_days ~ readmit + age_gte_65 + PPI + GAS + ABX, family = binomial)
+m <- glm(data = df, formula = HACDIF ~ readmit + age_gte_65 + PPI + GAS + ABX, family = binomial)
 
-summary(model)
+summary(m)
 ```
 
-Since our model suggests `ABX` to be the least significant predictor, we will re-run this model WITHOUT it.
+Since our model suggests `GAS` to be the least significant predictor, we will re-run this model WITHOUT it.
 
 ```{r Build log reg model 2}
-model2 <- glm(data = df, formula = cdif_gt_2_days ~ readmit + age_gte_65 + PPI + GAS, family = binomial)
+m2 <- glm(data = df, formula = HACDIF ~ age_gte_65 + readmit + PPI + ABX, family = binomial)
 
-summary(model2)
+summary(m2)
 ```
 
 Since all predictors were significant (p<=.05), we can keep model 2 and evaluate its performance by calculating the area under the receiving operator curve (AUROC or AUC).
 
 # Calculate AUROC to evaluate model 2 performance 
 ```{r Calculate AUROC}
-logit_prob <- predict(model2, newdata = df, type = 'response')
+logit_prob <- predict(m2, newdata = df, type = 'response')
 
-logit_roc <- pROC::roc(df$cdif_gt_2_days ~ logit_prob, plot = T, print.auc = T)
+logit_roc <- pROC::roc(df$HACDIF ~ logit_prob, plot = T, print.auc = T)
 ```
 
 The AUROC is 0.74 which shows that the model is moderately accurate at predicting whether a patient will be diagnosed with C diff given the following risk factors (age>=65, readmit, received PPI, received gastric acid supp or laxative, received abx). 
@@ -120,4 +124,3 @@ The AUROC is 0.74 which shows that the model is moderately accurate at predictin
 #logit_plot <- plot(logit_data)
 ```
 
-# End of Document 
