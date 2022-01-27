@@ -105,7 +105,11 @@ summary(m)
 logit_prob <- predict(m, newdata = df, type = 'response') 
 
 logit_roc <- pROC::roc(df$HACDIF ~ logit_prob, plot = T, print.auc = T)
+
+summary(m)
 ```
+
+Since our model suggests `GAS` to be the least significant predictor, we will re-run this model WITHOUT it.
 
 Since our model suggests `GAS` to be the least significant predictor, we will re-run this model WITHOUT it.
 ```{r Build log reg model 2}

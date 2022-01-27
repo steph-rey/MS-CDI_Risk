@@ -89,4 +89,26 @@ model_performance(model_fit_glm)
   results_tbl %>% roc_curve(HACDIF, .pred_0) %>% 
     autoplot()
 
-# End of Document
+# Feature importance ----
+  # Visualize most important features 
+  model_fit_glm %>% 
+    vip(num_features = 5,
+        geom = "point",
+        aes = list(size = 3, color = '18bc9c')) + 
+    theme_minimal(base_size = 15) + 
+    labs(title = "Logistic Regression: Feature Importance")
+    # Features with highest importance are: PPI, AGE, and ABX
+
+  # Visualize top features
+  df %>% ggplot(aes(HACDIF, age_gte_65, color = ABX)) +
+    geom_jitter(alpha = 0.3) + 
+    theme_minimal(base_size = 16) +
+    scale_color_viridis_d(end = 0.4) + 
+    labs(title = "Comparison of Predicted CDIF Diagnosis\nusing AGE and ABX as Key Predictors")
+
+  # Visualize top features
+  df %>% ggplot(aes(HACDIF, PPI, color = ABX)) +
+    geom_jitter(alpha = 0.3) + 
+    theme_minimal(base_size = 16) +
+    scale_color_viridis_d(end = 0.4) + 
+    labs(title = "Comparison of Predicted CDIF Diagnosis\nusing PPI and ABX as Key Predictors")
