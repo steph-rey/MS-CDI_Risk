@@ -1,0 +1,88 @@
+---
+title: "Univariate and Multivariate Regression Analysis Summary Tables for CDI Risk"
+author: "Steph Reynolds"
+date: "`r format(Sys.time(), '%b %d, %Y  %H:%M %p')`"
+output:
+  html_document:
+    toc: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+# Background
+
+## Project 
+MINDSCAPE: Modeling of infectious network dynamics for surveillance, control and prevention enhancement
+
+## Description 
+This file reads in `df.CDI` and displays univariate and multivariate regression model results in a formatted table. Both models aim to predict risk of hospital-acquired Clostridium difficile infection (HA-CDI).
+
+# Load required packages 
+```{r Load required packages}
+library(tidyverse)
+library(gtsummary)
+library(performance)
+```
+
+# Import `df_CDI_risk_model.csv` and select only necessary variables
+```{r Import data}
+df <- read_csv("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/df_CDI_risk_model.csv") %>% 
+  select(-c(DBM, ED_dispo, HAI_first_date, ID))
+```
+
+# Build multivariate logistic regression model and assign to `m`
+```{r Build multivariate log reg model}
+m <- glm(data = df, formula = HACDIF ~ readmit + age_gte_65 + PPI + GAS + anyGAS + LAX + ABX, family = binomial)
+summary(m)
+```
+
+# Check model performance: Calculate AIC, R2, and plot ROC
+```{r Check model performance and plot ROC}
+# Check model performance (AIC, R^2)
+model_performance(m)
+
+# Plot ROC 
+logit_prob <- predict(m, newdata = df, type = 'response')
+logit_roc <- pROC::roc(df$HACDIF ~ logit_prob, plot = T, print.auc = T)
+```
+
+# Create summary table of multivariate regression model results
+```{r Summary table of multivariate regression}
+tbl_mv_reg <- tbl_regression(m, exponentiate = T,
+                          label = list(readmit ~ "Readmission in prior 30 days",
+                                       age_gte_65 ~ "Age>=65 years old",
+                                       PPI ~ "Receipt of proton pump inhibitor (PPI)",
+                                       GAS ~ "Receipt of antacids or H2R antagonist",
+                                       anyGAS ~ "Receipt of any gastric acid suppressant or PPI",
+                                       LAX ~ "Receipt of laxative",
+                                       ABX ~ "Receipt of antibiotic")) %>% 
+  add_vif() %>% 
+  bold_p()
+
+as_gt(tbl_mv_reg)
+```
+
+# Create summary table of univariate regression model results 
+```{r Summary table of univariate regression}
+tbl_uv_reg <- df %>%
+    tbl_uvregression(
+    method = glm, 
+    y = HACDIF,
+    method.args = list(family = binomial),
+    exponentiate = T, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2),
+    label = list(readmit ~ "Readmission in prior 30 days",
+                 age_gte_65 ~ "Age>=65 years old",
+                 PPI ~ "Receipt of proton pump inhibitor (PPI)",
+                 GAS ~ "Receipt of antacids or H2R antagonist",
+                 anyGAS ~ "Receipt of any gastric acid suppressant or PPI",
+                 LAX ~ "Receipt of laxative",
+                 ABX ~ "Receipt of antibiotic")) %>% 
+  bold_p()
+
+as_gt(tbl_uv_reg)
+```
+
