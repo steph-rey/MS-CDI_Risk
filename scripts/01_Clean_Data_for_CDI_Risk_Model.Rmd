@@ -39,13 +39,13 @@ library(DT)
 
 # Import data (only first 5000 lines)
 ```{r Read in data}
-dm <- read_delim("/Users/sreynolds2/Downloads/ucsf_data_pull_11.08.21/demographics and event table 11.08.21.csv", delim = "|")
+dm <- read_delim("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/raw/demographics and event table 11.08.21.csv", delim = "|")
 
-# lab <- read_delim("/Users/sreynolds2/Downloads/ucsf_data_pull_11.08.21/lab results 11.08.21.csv", delim = "|", n_max = 5000)
+# lab <- read_delim("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/raw/lab results 11.08.21.csv", delim = "|", n_max = 5000)
 
-# dx <- read_delim("/Users/sreynolds2/Downloads/ucsf_data_pull_11.08.21/covid diagnoses 11.08.21.csv", delim = "|", n_max = 5000)
+# dx <- read_delim("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/raw/covid diagnoses 11.08.21.csv", delim = "|", n_max = 5000)
 
-med_admin <- read_delim("/Users/sreynolds2/Downloads/ucsf_data_pull_11.08.21/med admin table 11.08.21.csv", delim = "|")
+med_admin <- read_delim("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/raw/med admin table 11.08.21.csv", delim = "|")
 
 ```
 

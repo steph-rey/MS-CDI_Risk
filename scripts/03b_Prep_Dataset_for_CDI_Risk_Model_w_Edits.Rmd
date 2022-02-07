@@ -1,0 +1,254 @@
+---
+title: "Prepare Dataset for CDI Risk Assessment Model - Edits (Combine PPI and gastric acid sup)"
+author: "Steph Reynolds"
+date: "`r format(Sys.time(), '%b %d, %Y  %H:%M %p')`"
+output:
+  html_document:
+    toc: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+# Background
+
+## Project 
+MINDSCAPE: Modeling of infectious network dynamics for surveillance, control and prevention enhancement
+
+## Description 
+This file reads in necessary data and identifies variables of interest for building a multivariate logistic regression model to evaluate C diff risk among hospitalized patients. The resulting dataframe (`df.CDI`) contains binary indicators for CDI risk factors. Variables include:
+
+  * `ID` --> each patient's unique de-identified encounter ID 
+  * `readmit` --> whether patient had a prior hospital admission in the last 30 days
+  * `ED_dispo` --> whether pt was admitted from Emergency Dept (ED) ???
+    - NOTE: UNCLEAR! VERIFY / LEO WHAT THIS SHOULD BE TO INDICATE THAT PT WAS ADMITTED TO ED!
+  * `age_gte_65` --> whether pt is aged 65 years or older at time of hospitalization
+  * `PPI` --> whether pt received proton pump inhibitor (PPI) during hospital stay
+  * `GAS` --> whether pt received gastric acid suppressants (GAS) during hospital stay
+    - NOTE: This includes "ANTACIDS" and "HISTAMINE H2-RECEPTOR INHIBITORS"
+    - Could this be coded as anything else in `pharm_class`? 
+  * `anyGAS` --> whether pt received PPI and/or GAS during hospital stay
+  * `LAX` --> whether pt received laxatives (LAX) during hospital stay
+    - NOTE: This includes "LAXATIVES AND CATHARTICS" and "LAXATIVES, LOCAL/RECTAL"
+  * `ABX` --> whether pt received antibiotics during hospital stay
+    - NOTE: THIS DOES NOT INCLUDE OUTPATIENT ABX - ONLY THOSE DURING HOSPITALIZATION. 
+  * `DBM` --> whether pt is diagnosed with diabetes mellitus (DBM) 
+    - NOTE: DO NOT USE! ONLY HAVE DBM DX FOR COVID POSITIVE PTS.
+
+# Load required packages 
+```{r Load required packages}
+library(readr)
+library(tidyverse)
+library(lubridate)
+library(tableone)
+library(kableExtra)
+library(DT)
+```
+
+# Import `dm`, `med`, and `dx` tables 
+```{r Import data}
+dm <- read_delim("/Users/sreynolds2/Downloads/ucsf_data_pull_11.08.21/demographics and event table 11.08.21.csv", delim = "|")
+
+med <- read_delim("/Users/sreynolds2/Downloads/ucsf_data_pull_11.08.21/med admin table 11.08.21.csv", delim = "|")
+
+dx <- read_delim("/Users/sreynolds2/Downloads/ucsf_data_pull_11.08.21/covid diagnoses 11.08.21.csv", delim = "|")
+```
+
+# Clean `dm` table - deselect unnecessary variables, change to appropriate variable type
+```{r Clean `dm` table}
+dm <- dm %>% 
+  select(deid_enc_id, age, readmit, HAI_type, HAI_first_date, ED_dispo, admit_time) %>% 
+  mutate_at(c("readmit", "ED_dispo", "HAI_type"), factor) %>% 
+  mutate(HAI_first_date = substr(HAI_first_date, 1, 20)) %>% 
+  mutate_at(c("admit_time", "HAI_first_date"), ymd_hms) %>% 
+  mutate(age_gte_65 = if_else(age>=65, 1, 0),
+         readmit = if_else(readmit=="Yes", 1, 0),
+         cdif = if_else(HAI_type=="CDIF", 1, 0),
+         HAI_gt_2_days = if_else((difftime(HAI_first_date, admit_time, units = "days")) > 2, 1, 0),
+         # Add column to indicate whether CDIFF dx was > 2 days of admission
+         HACDIF = if_else(cdif==1 & HAI_gt_2_days==1, 1, 0)) %>% 
+  select(-c(age, HAI_type, admit_time, cdif, HAI_gt_2_days))
+
+# Filter for pts who were diagnosed with hospital-acquired C diff (HACDIF)
+HA_cdif_pts <- dm %>% 
+  filter(HACDIF==1)
+
+# Proportion patients with HACDIF out of total number of pts in dm table
+cat("Proportion of pts with HA-CDI out of total number of pts:", 
+    round(n_distinct(HA_cdif_pts$deid_enc_id)/(n_distinct(dm$deid_enc_id)), 4)
+```
+
+# Clean `med` table - deselect unnecessary variables, change to appropriate variable type
+```{r Clean `med` table}
+# With med table, create new variables to indicate whether pt received PPI, GAS, anyGAS, LAX and ABX
+# See beginning of script for description of variables 
+
+med <- med %>% 
+  select(deid_enc_id, thera_class, pharm_class, taken_time) %>% 
+  mutate_at(c("thera_class", "pharm_class"), factor) %>%
+  mutate(PPI = if_else(pharm_class=="PROTON-PUMP INHIBITORS", 1, 0),    
+         GAS = if_else(pharm_class %in% c("ANTACIDS", "HISTAMINE H2-RECEPTOR INHIBITORS"), 1, 0),
+         anyGAS = if_else(pharm_class %in% c("PROTON-PUMP INHIBITORS", "ANTACIDS", "HISTAMINE H2-RECEPTOR INHIBITORS"), 1, 0),
+         LAX = if_else(pharm_class %in% c("LAXATIVES AND CATHARTICS", "LAXATIVES, LOCAL/RECTAL"), 1, 0),
+         ABX = if_else(thera_class %in% c("ANTIBIOTICS", "ANTIFUNGALS", "ANTIINFECTIVES/MISCELLANEOUS", "ANTIPARASITICS",
+                                          "ANTIVIRALS"), 1, 0)) %>% 
+  select(-c(thera_class, pharm_class))
+```
+
+# Create `med_taken_before_HAI` table to indicate whether pt received PPI, GAS, or ABX up to one day before HAI_first_date (aka when HACDIF culture was ordered)
+```{r Create `med_taken_before_HAI` table}
+med_taken_before_HAI <- dm %>% 
+  left_join(med, by = "deid_enc_id") %>%     # Left join dm and med tables on ID
+  filter(taken_time < HAI_first_date) %>%     # Filter for where  taken_time (for PPI, ABX, or GAS) < HAI_first_date
+  group_by(deid_enc_id) %>%                   # Group by ID
+  summarize(Num_of_PPI = sum(PPI),            # Count total number of PPI, GAS, anyGAS, LAX, ABX up to day before HAI_first_date
+            Num_of_GAS = sum(GAS),
+            Num_of_anyGAS = sum(anyGAS),
+            Num_of_LAX = sum(LAX),
+            Num_of_ABX = sum(ABX)) %>% 
+  mutate(PPI = if_else(Num_of_PPI>=1, 1, 0),  # Transform to binary vars, indicating yes/no whether pt received PPI, GAS, or ABX
+         GAS = if_else(Num_of_GAS>=1, 1, 0),
+         anyGAS = if_else(Num_of_anyGAS>=1, 1, 0),
+         LAX = if_else(Num_of_LAX>=1, 1, 0),
+         ABX = if_else(Num_of_ABX>=1, 1, 0)) %>% 
+  select(deid_enc_id, PPI, GAS, anyGAS, LAX, ABX)          # Only keep relevant variables
+
+# View table
+med_taken_before_HAI
+
+# Rather than number of PPI/GAS/anyGAS/LAX/ABX, should this just be a binary variable indicating receipt of PPI/GAS/anyGAS/LAX/ABX (coded as 1=yes or 0=no)? Section commented above handles this. Can remove this chunk of code if decide it's better to have frequency counts for PPI/GAS/anyGAS/LAX/ABX. 
+```
+
+# Clean `dx` table - create table `dbm` to indicate diabetes mellitus (DBM) diagnoses
+```{r Clean `dx` table, create table to indicates DBM dx}
+dbm <- dx %>% 
+  mutate(DBM = if_else(dx_group=="DIABETES MELLITUS", 1, 0)) %>%
+  group_by(deid_enc_id) %>% 
+  summarize(n_dbm = sum(DBM)) %>% 
+  mutate(DBM = if_else(n_dbm>=1, 1, 0)) %>% 
+  select(-n_dbm)
+
+sum(dbm$DBM)
+# 406 patients diagnosed with diabetes 
+
+# 406/1210 = 34% of Covid-positive pts diag with DBM 
+```
+
+NOTE: Only have diabetes diagnoses for 1,210 out of 54,955 patients. Missing data on DBM diagnosis for ~97% of patients. Only have DBM data for Covid-positive patients. Checked demographics and events table, and diabetes dx not listed as variable. Would need Leo to re-pull data gathering diabetes dx for ALL patients. 
+
+# Join `dm`, `med`, and `dbm` tables and assign to `df_CDI`
+```{r Merge all tables}
+df_CDI <- dm %>% 
+  left_join(med_taken_before_HAI, by = 'deid_enc_id') %>% # Left join dm and med_taken_before_HAI
+  left_join(dbm, by = "deid_enc_id") %>%          # Left join dm and dbm
+  mutate(PPI = ifelse(is.na(PPI), 0, PPI),        # Reassign NA values for PPI:DBM to 0
+         GAS = ifelse(is.na(GAS), 0, GAS),
+         anyGAS = ifelse(is.na(anyGAS), 0, anyGAS),
+         LAX = ifelse(is.na(LAX), 0, LAX),
+         ABX = ifelse(is.na(ABX), 0, ABX), 
+         DBM = ifelse(is.na(DBM), 0, DBM)) %>%
+  rename(ID = deid_enc_id)                        # Rename to ID for convenience
+
+df_CDI <- mutate_at(df_CDI, vars(c(readmit, age_gte_65, HACDIF, PPI, GAS, anyGAS, LAX, ABX, DBM)), factor)
+```
+
+# Preview and explore resulting dataset
+```{r Preview and explore `df_CDI`}
+# Preview dataset and check variables types 
+str(df_CDI)
+
+# Confirm that `df_CDI` has 55,037 obs - same number of obs as `dm` table
+
+# Use DT package to explore dataset
+DT::datatable(df_CDI)
+```
+
+# Calculate descriptives for categorical variables in `df_CDI`
+```{r Create table one of descriptives}
+tableone <- CreateCatTable(data=df_CDI, vars=c("readmit", "ED_dispo", "age_gte_65", "HACDIF", "PPI", "GAS", "anyGAS", "LAX", "ABX", "DBM"))
+
+print(tableone, showAllLevels = T, noSpaces = T)
+
+# For binary variables, 1 = YES and 0 = NO. 
+```
+
+# Save resulting dataset `df_CDI` as .csv file and rds object 
+```{r Save resulting dataset as CSV and RDS}
+write_csv(df_CDI, "/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/df_CDI_risk_model.csv")
+saveRDS(df_CDI, "/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/df_CDI_risk_model.rds")
+```
+
+# Create 2x2 contingency table for age and CDIF and compute OR 
+```{r Contingency table and OR for age and CDIF}
+table(df_CDI$HACDIF, df_CDI$age_gte_65)
+
+chisq.test(df_CDI$HACDIF, df_CDI$age_gte_65)
+# p-value<0.05, thus, HACIF and AGE are NOT independent, aka they are related
+
+fisher.test(df_CDI$HACDIF, df_CDI$age_gte_65)
+# p-value<0.05, thus, HACIF are NOT independent, aka they are related
+# OR=1.66, meaning patients that are 65 and older are 1.66x more likely to be diagnosed with HA-CDIF than those who are under 65 years old
+```
+
+# Create 2x2 contingency table for ABX and CDIF and compute OR 
+```{r Contingency table and OR for ABX and CDIF}
+table(df_CDI$HACDIF, df_CDI$ABX)
+
+chisq.test(df_CDI$HACDIF, df_CDI$ABX)
+# p-value<0.05, thus, HACIF and ABX are DEPENDENT
+
+fisher.test(df_CDI$HACDIF, df_CDI$ABX)
+# OR=633, meaning patients who received ABX up to one day before HAI diagnosis are 633x more likely to be diagnosed with HA-CDIF than those who do not receive ABX
+```
+
+# Create 2x2 contingency table for GAS and CDIF and compute OR 
+```{r Contingency table and OR for GAS and CDIF}
+table(df_CDI$HACDIF, df_CDI$GAS)
+
+chisq.test(df_CDI$HACDIF, df_CDI$GAS)
+# p-value<0.05, thus, HACIF and GAS are DEPENDENT
+
+fisher.test(df_CDI$HACDIF, df_CDI$GAS)
+# OR=233, meaning patients who received gastric acid suppressants up to one day before HAI diagnosis are 233x more likely to be diagnosed with HA-CDIF than those who do not receive gastric acid suppressants
+```
+
+# Create 2x2 contingency table for anyGAS and CDIF and compute OR 
+```{r Contingency table and OR for GAS and CDIF}
+table(df_CDI$HACDIF, df_CDI$anyGAS)
+
+chisq.test(df_CDI$HACDIF, df_CDI$anyGAS)
+# p-value<0.05, thus, HACIF and anyGAS are DEPENDENT
+
+fisher.test(df_CDI$HACDIF, df_CDI$anyGAS)
+# OR=343, meaning patients who received gastric acid suppressants and/or PPI up to one day before HAI diagnosis are 343x more likely to be diagnosed with HA-CDIF than those who do not receive gastric acid suppressants and/or PPI
+```
+
+# Create 2x2 contingency table for LAX and CDIF and compute OR 
+```{r Contingency table and OR for GAS and CDIF}
+table(df_CDI$HACDIF, df_CDI$LAX)
+
+chisq.test(df_CDI$HACDIF, df_CDI$LAX)
+# p-value<0.05, thus, HACIF and LAX are DEPENDENT
+
+fisher.test(df_CDI$HACDIF, df_CDI$LAX)
+# OR=409, meaning patients who received laxatives up to one day before HAI diagnosis are 409x more likely to be diagnosed with HA-CDIF than those who do not receive laxatives 
+```
+
+# Create 2x2 contingency table for PPI and CDIF and compute OR 
+```{r Contingency table and OR for PPI and CDIF}
+table(df_CDI$HACDIF, df_CDI$PPI)
+
+chisq.test(df_CDI$HACDIF, df_CDI$PPI)
+# p<0.05, thus, HACIF and PPI are DEPENDENT
+
+fisher.test(df_CDI$HACDIF, df_CDI$PPI)
+# OR=141, meaning patients who received a proton pump inhibitor (PPI) up to one day before HAI diagnosis are 141x more likely to be diagnosed with HA-CDIF than those who do not receive PPI
+```
+
+# Next Steps 
+
+  * Create multivariate logistic regression model, divide data into 3 chunks/time periods (e.g. 2019, 2020, 2021)
+    + 1 chunk used to train model, the other 2 used to evaluate model performance (e.g. 2019 chunk used to train model, while 2020-2021 used to test model performance)
+  * Evaluate "model creep" or how much the optimized model changes over time? 

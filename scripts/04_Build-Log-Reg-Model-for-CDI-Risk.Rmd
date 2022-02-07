@@ -29,18 +29,22 @@ This file reads in `df.CDI` and checks the assumptions for creating a logistic r
 ## Predictor/Independent Variables:
 *All predictors are binary.*
 
+  * `ID` --> each patient's unique de-identified encounter ID 
   * `readmit` --> whether patient had a prior hospital admission in the last 30 days
+  * `ED_dispo` --> whether pt was admitted from Emergency Dept (ED) ???
+    - NOTE: UNCLEAR! VERIFY / LEO WHAT THIS SHOULD BE TO INDICATE THAT PT WAS ADMITTED TO ED!
   * `age_gte_65` --> whether pt is aged 65 years or older at time of hospitalization
   * `PPI` --> whether pt received proton pump inhibitor (PPI) during hospital stay
-  * `GAS` --> whether pt received gastric acid suppressants and laxatives (GAS) during hospital stay
-    - NOTE: This includes "ANTACIDS", "LAXATIVES AND CATHARTICS", and "LAXATIVES, LOCAL/RECTAL"
-  * `ABX` --> whether pt received antibiotics during hospital stay 
-    - NOTE: THIS DOES NOT INCLUDE OUTPATIENT ABX - ONLY THOSE DURING HOSPITALIZATION.
-  * THINK ABOUT INCLUDING THESE LATER!!!
-    - `ED_dispo` --> whether pt was admitted from Emergency Dept (ED) ???
-      + NOTE: UNCLEAR! VERIFY / LEO WHAT THIS SHOULD BE TO INDICATE THAT PT WAS ADMITTED TO ED.
-    - `DBM` --> whether pt is diagnosed with diabetes mellitus (DBM) 
-      + NOTE: DO NOT USE! ONLY HAVE DBM DX FOR COVID POSITIVE PTS.
+  * `GAS` --> whether pt received gastric acid suppressants (GAS) during hospital stay
+    - NOTE: This includes "ANTACIDS" and "HISTAMINE H2-RECEPTOR INHIBITORS"
+    - Could this be coded as anything else in `pharm_class`? 
+  * `anyGAS` --> whether pt received PPI and/or GAS during hospital stay
+  * `LAX` --> whether pt received laxatives (LAX) during hospital stay
+    - NOTE: This includes "LAXATIVES AND CATHARTICS" and "LAXATIVES, LOCAL/RECTAL"
+  * `ABX` --> whether pt received antibiotics during hospital stay
+    - NOTE: THIS DOES NOT INCLUDE OUTPATIENT ABX - ONLY THOSE DURING HOSPITALIZATION. 
+  * `DBM` --> whether pt is diagnosed with diabetes mellitus (DBM) 
+    - NOTE: DO NOT USE! ONLY HAVE DBM DX FOR COVID POSITIVE PTS.
 
 # Load required packages 
 ```{r Load required packages}
@@ -85,7 +89,7 @@ Since our model will include 5 predictors and the probability of Cdiff is 101/55
 
 # Build logistic regression model 
 ```{r Build logistic regression model}
-m <- glm(data = df, formula = HACDIF ~ readmit + age_gte_65 + PPI + GAS + ABX, family = binomial)
+m <- glm(data = df, formula = HACDIF ~ readmit + age_gte_65 + PPI + GAS + anyGAS + LAX + ABX, family = binomial)
 
 summary(m)
 ```
@@ -99,9 +103,7 @@ logit_roc <- pROC::roc(df$HACDIF ~ logit_prob, plot = T, print.auc = T)
 summary(m)
 ```
 
-Since our model suggests `PPI` to be the least significant predictor, we will re-run this model WITHOUT it.
-
-Since our model suggests `PPI` to be the least significant predictor, we will re-run this model WITHOUT it.
+Since our model suggests `PPI` and `anyGAS` to be the least significant predictors, we will re-run this model WITHOUT them.
 ```{r Build log reg model 2}
 m2 <- glm(data = df, formula = HACDIF ~ age_gte_65 + readmit + GAS + ABX, family = binomial)
 
@@ -117,5 +119,5 @@ logit_prob <- predict(m2, newdata = df, type = 'response')
 logit_roc <- pROC::roc(df$HACDIF ~ logit_prob, plot = T, print.auc = T)
 ```
 
-The AUROC is 0.97 which shows that the model is very accurate at predicting whether a patient will be diagnosed with C diff given the following risk factors (age>=65, readmit, received PPI, received gastric acid supp or laxative, received abx). 
+The AUROC is 0.96 which shows that the model is very accurate at predicting whether a patient will be diagnosed with C diff given the following risk factors (age>=65, readmit, received gastric acid supp (antacid or H2R), and received abx). 
 
