@@ -28,7 +28,6 @@ This file reads in necessary data and identifies variables of interest for build
   * `PPI` --> whether pt received proton pump inhibitor (PPI) during hospital stay
   * `GAS` --> whether pt received gastric acid suppressants (GAS) during hospital stay
     - NOTE: This includes "ANTACIDS" and "HISTAMINE H2-RECEPTOR INHIBITORS"
-    - Could this be coded as anything else in `pharm_class`? 
   * `anyGAS` --> whether pt received PPI and/or GAS during hospital stay
   * `LAX` --> whether pt received laxatives (LAX) during hospital stay
     - NOTE: This includes "LAXATIVES AND CATHARTICS" and "LAXATIVES, LOCAL/RECTAL"
@@ -77,7 +76,7 @@ HA_cdif_pts <- dm %>%
 
 # Proportion patients with HACDIF out of total number of pts in dm table
 cat("Proportion of pts with HA-CDI out of total number of pts:", 
-    round(n_distinct(HA_cdif_pts$deid_enc_id)/(n_distinct(dm$deid_enc_id)), 4)
+    round(n_distinct(HA_cdif_pts$deid_enc_id)/(n_distinct(dm$deid_enc_id)), 4))
 ```
 
 # Clean `med` table - deselect unnecessary variables, change to appropriate variable type
@@ -86,15 +85,14 @@ cat("Proportion of pts with HA-CDI out of total number of pts:",
 # See beginning of script for description of variables 
 
 med <- med %>% 
-  select(deid_enc_id, thera_class, pharm_class, taken_time) %>% 
+  select(deid_enc_id, name, thera_class, pharm_class, taken_time) %>% 
   mutate_at(c("thera_class", "pharm_class"), factor) %>%
-  mutate(PPI = if_else(pharm_class=="PROTON-PUMP INHIBITORS", 1, 0),    
+  mutate(PPI = if_else(pharm_class=="PROTON-PUMP INHIBITORS" | str_detect(name, fixed("PANTOPRAZOLE", ignore_case=TRUE)), 1, 0),    
          GAS = if_else(pharm_class %in% c("ANTACIDS", "HISTAMINE H2-RECEPTOR INHIBITORS"), 1, 0),
-         anyGAS = if_else(pharm_class %in% c("PROTON-PUMP INHIBITORS", "ANTACIDS", "HISTAMINE H2-RECEPTOR INHIBITORS"), 1, 0),
+         anyGAS = if_else(pharm_class %in% c("PROTON-PUMP INHIBITORS", "ANTACIDS", "HISTAMINE H2-RECEPTOR INHIBITORS") | str_detect(name, fixed("PANTOPRAZOLE", ignore_case=TRUE)), 1, 0),
          LAX = if_else(pharm_class %in% c("LAXATIVES AND CATHARTICS", "LAXATIVES, LOCAL/RECTAL"), 1, 0),
-         ABX = if_else(thera_class %in% c("ANTIBIOTICS", "ANTIFUNGALS", "ANTIINFECTIVES/MISCELLANEOUS", "ANTIPARASITICS",
-                                          "ANTIVIRALS"), 1, 0)) %>% 
-  select(-c(thera_class, pharm_class))
+         ABX = if_else(thera_class %in% c("ANTIBIOTICS", "ANTIFUNGALS", "ANTIINFECTIVES/MISCELLANEOUS", "ANTIPARASITICS","ANTIVIRALS") | str_detect(name, fixed("VANCOMYCIN")) | str_detect(name, fixed("CEFTRIAXONE")) | str_detect(name, fixed("CEFEPIME")) | str_detect(name, fixed("LEVOFLOXACIN")) | str_detect(name, fixed("CIPROFLOXACIN")), 1, 0))
+
 ```
 
 # Create `med_taken_before_HAI` table to indicate whether pt received PPI, GAS, or ABX up to one day before HAI_first_date (aka when HACDIF culture was ordered)
@@ -215,7 +213,7 @@ fisher.test(df_CDI$HACDIF, df_CDI$GAS)
 ```
 
 # Create 2x2 contingency table for anyGAS and CDIF and compute OR 
-```{r Contingency table and OR for GAS and CDIF}
+```{r Contingency table and OR for anyGAS and CDIF}
 table(df_CDI$HACDIF, df_CDI$anyGAS)
 
 chisq.test(df_CDI$HACDIF, df_CDI$anyGAS)
@@ -226,7 +224,7 @@ fisher.test(df_CDI$HACDIF, df_CDI$anyGAS)
 ```
 
 # Create 2x2 contingency table for LAX and CDIF and compute OR 
-```{r Contingency table and OR for GAS and CDIF}
+```{r Contingency table and OR for LAX and CDIF}
 table(df_CDI$HACDIF, df_CDI$LAX)
 
 chisq.test(df_CDI$HACDIF, df_CDI$LAX)
