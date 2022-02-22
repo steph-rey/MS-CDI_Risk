@@ -84,21 +84,35 @@ cat("Proportion of pts with HA-CDI out of total number of pts:",
 # With med table, create new variables to indicate whether pt received PPI, GAS, anyGAS, LAX and ABX
 # See beginning of script for description of variables 
 
-med <- med %>% 
+med2 <- med %>% 
   select(deid_enc_id, name, thera_class, pharm_class, taken_time) %>% 
   mutate_at(c("thera_class", "pharm_class"), factor) %>%
-  mutate(PPI = if_else(pharm_class=="PROTON-PUMP INHIBITORS" | str_detect(name, fixed("PANTOPRAZOLE", ignore_case=TRUE)), 1, 0),    
+  mutate(PPI = if_else(pharm_class=="PROTON-PUMP INHIBITORS" | str_detect(name, "PANTOPRAZOLE"), 1, 0),    
          GAS = if_else(pharm_class %in% c("ANTACIDS", "HISTAMINE H2-RECEPTOR INHIBITORS"), 1, 0),
-         anyGAS = if_else(pharm_class %in% c("PROTON-PUMP INHIBITORS", "ANTACIDS", "HISTAMINE H2-RECEPTOR INHIBITORS") | str_detect(name, fixed("PANTOPRAZOLE", ignore_case=TRUE)), 1, 0),
+         anyGAS = if_else(pharm_class %in% c("PROTON-PUMP INHIBITORS", "ANTACIDS", "HISTAMINE H2-RECEPTOR INHIBITORS") | str_which(name, "PANTOPRAZOLE"), 1, 0),
          LAX = if_else(pharm_class %in% c("LAXATIVES AND CATHARTICS", "LAXATIVES, LOCAL/RECTAL"), 1, 0),
-         ABX = if_else(thera_class %in% c("ANTIBIOTICS", "ANTIFUNGALS", "ANTIINFECTIVES/MISCELLANEOUS", "ANTIPARASITICS","ANTIVIRALS") | str_detect(name, fixed("VANCOMYCIN")) | str_detect(name, fixed("CEFTRIAXONE")) | str_detect(name, fixed("CEFEPIME")) | str_detect(name, fixed("LEVOFLOXACIN")) | str_detect(name, fixed("CIPROFLOXACIN")), 1, 0))
+         ABX = if_else(thera_class %in% c("ANTIBIOTICS", "ANTIFUNGALS", "ANTIINFECTIVES/MISCELLANEOUS", "ANTIPARASITICS","ANTIVIRALS") | str_which(name, "VANCOMYCIN|CEFTRIAXONE|CEFEPIME|LEVOFLOXACIN|CIPROFLOXACIN"), 1, 0))
+```
 
+# Alternative method for string matching ABX and PPI 
+```{r Alternative method for string matching using data.table::%like%, eval = FALSE}
+# Create vector for names of common antibiotics
+names_of_abx <- "VANCOMYCIN|CEFTRIAXONE|CEFEPIME|LEVOFLOXACIN|CIPROFLOXACIN"
+
+med3 <- med %>% 
+  select(deid_enc_id, name, thera_class, pharm_class, taken_time) %>% 
+  mutate_at(c("thera_class", "pharm_class"), factor) %>%
+  mutate(PPI = if_else(pharm_class=="PROTON-PUMP INHIBITORS" | name %like% "PANTOPRAZOLE", 1, 0),    
+         GAS = if_else(pharm_class %in% c("ANTACIDS", "HISTAMINE H2-RECEPTOR INHIBITORS"), 1, 0),
+         anyGAS = if_else(pharm_class %in% c("PROTON-PUMP INHIBITORS", "ANTACIDS", "HISTAMINE H2-RECEPTOR INHIBITORS") | name %like% "PANTOPRAZOLE", 1, 0),
+         LAX = if_else(pharm_class %in% c("LAXATIVES AND CATHARTICS", "LAXATIVES, LOCAL/RECTAL"), 1, 0),
+         ABX = if_else(thera_class %in% c("ANTIBIOTICS", "ANTIFUNGALS", "ANTIINFECTIVES/MISCELLANEOUS", "ANTIPARASITICS","ANTIVIRALS") | name %like% names_of_abx, 1, 0))
 ```
 
 # Create `med_taken_before_HAI` table to indicate whether pt received PPI, GAS, or ABX up to one day before HAI_first_date (aka when HACDIF culture was ordered)
 ```{r Create `med_taken_before_HAI` table}
 med_taken_before_HAI <- dm %>% 
-  left_join(med, by = "deid_enc_id") %>%     # Left join dm and med tables on ID
+  left_join(med2, by = "deid_enc_id") %>%     # Left join dm and med tables on ID
   filter(taken_time < HAI_first_date) %>%     # Filter for where  taken_time (for PPI, ABX, or GAS) < HAI_first_date
   group_by(deid_enc_id) %>%                   # Group by ID
   summarize(Num_of_PPI = sum(PPI),            # Count total number of PPI, GAS, anyGAS, LAX, ABX up to day before HAI_first_date
