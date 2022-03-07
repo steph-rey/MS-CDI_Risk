@@ -41,7 +41,7 @@ library(DT)
 ```{r Read in data}
 dm <- read_delim("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/raw/demographics and event table 11.08.21.csv", delim = "|")
 
-# lab <- read_delim("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/raw/lab results 11.08.21.csv", delim = "|", n_max = 5000)
+lab <- read_delim("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/raw/lab results 11.08.21.csv", delim = "|", n_max = 5000)
 
 # dx <- read_delim("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/raw/covid diagnoses 11.08.21.csv", delim = "|", n_max = 5000)
 

@@ -26,7 +26,8 @@ dm <- read_csv("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/
 
 # dx <- read_csv("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/dx.csv")
 
-# lab <- read_csv("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/lab.csv")
+lab <- read_csv("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/lab.csv")
+# In lab tbl, you can filter for COMPONENT_ID=='1301' to view encounters that had CDIF ordered - there are 3,876 unique encounter IDs in which CDIF was ordered.
 
 med_admin <- read_csv("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/med_admin.csv")
 ```
