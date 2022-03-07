@@ -14,17 +14,16 @@ knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 
 # Background
 
-## Project 
+## Project
+
 MINDSCAPE: Modeling of infectious network dynamics for surveillance, control and prevention enhancement
 
-## Description 
-This file imports the first n=5000 lines of the following data, then cleans each dataset for next steps (exploration).
-  * Demographics and events (dm)
-  * Lab results (lab)
-  * Diagnoses (dx)
-  * Medication administration (med_admin)
+## Description
 
-# Load packages 
+This file imports the first n=5000 lines of the following data, then cleans each dataset for next steps (exploration). \* Demographics and events (dm) \* Lab results (lab) \* Diagnoses (dx) \* Medication administration (med_admin)
+
+# Load packages
+
 ```{r Load packages}
 # Load required packages 
 #library(here)
@@ -37,7 +36,8 @@ library(DT)
 #library(kableExtra)
 ```
 
-# Import data (only first 5000 lines)
+# Import data
+
 ```{r Read in data}
 dm <- read_delim("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/raw/demographics and event table 11.08.21.csv", delim = "|")
 
@@ -50,6 +50,7 @@ med_admin <- read_delim("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_R
 ```
 
 # Demographics and events table
+
 ```{r Demographics and events table - clean and generate categorical frequency table}
 # Clean `dm` data
 dm <- dm %>% 
@@ -65,7 +66,8 @@ CreateCatTable(data = dm, vars = c("sex", "race", "ethnicity", "smoking", "covid
 
 ```
 
-# Diagnoses table 
+# Diagnoses table
+
 ```{r Diagnoses table - clean and generate categorical frequency table, eval = FALSE}
 # Clean `dx` data
 dx <- dx %>% 
@@ -78,6 +80,7 @@ CreateCatTable(data = dx, vars = c("dx_group", "DX_NAME", "present_on_admit", "s
 ```
 
 # Lab results table
+
 ```{r Lab results table - clean and generate categorical frequency table, eval = FALSE}
 # Clean `lab` data
 lab <- lab %>%
@@ -91,6 +94,7 @@ CreateCatTable(data = lab, vars = c("COMMON_NAME", "Abnormal", "lab_concept"))
 ```
 
 # Med admin table
+
 ```{r Med admin table - clean and generate categorical frequency table}
 # Clean `med_admin` table 
 med_admin <- med_admin %>% 
@@ -104,7 +108,8 @@ CreateCatTable(data = med_admin, vars = c("med_name", "thera_class", "pharm_clas
 
 ```
 
-# Save all data 
+# Save all data
+
 ```{r Save data as .csv files}
 write_csv(dm, file = "/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/dm.csv")
 
