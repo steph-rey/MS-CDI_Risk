@@ -45,6 +45,7 @@ library(readr)
 library(tidyverse)
 library(lubridate)
 library(tableone)
+library(DescTools) # need for %like% 
 ```
 
 # Import `dm`, `med`, and `dx` tables
@@ -86,7 +87,7 @@ cat("Proportion of pts with HA-CDI out of total number of pts:",
 
 **Alternative method - didn't work when I re-ran on 3/7/22, but keep just in case**
 
-```{r Clean `med` table, eval=FALSE}
+```{r, eval=FALSE}
 # With med table, create new variables to indicate whether pt received PPI, GAS, anyGAS, LAX and ABX
 # See beginning of script for description of variables 
 
@@ -100,9 +101,9 @@ med2 <- med %>%
          ABX = if_else(thera_class %in% c("ANTIBIOTICS", "ANTIFUNGALS", "ANTIINFECTIVES/MISCELLANEOUS", "ANTIPARASITICS","ANTIVIRALS") | str_which(name, "VANCOMYCIN|CEFTRIAXONE|CEFEPIME|LEVOFLOXACIN|CIPROFLOXACIN"), 1, 0))
 ```
 
-# Create binary variables to indicate whether patients received PPI, GAS, LAX, and/or ABX; assign to tablte `med2`
+# Create binary variables to indicate whether patients received PPI, GAS, LAX, and/or ABX; assign to table `med2`
 
-```{r Clean `med` table}
+```{r Create binary vars to indicate whether pts received PPI, GAS, LAX, ABX}
 # Create vector for names of common antibiotics
 names_of_abx <- "VANCOMYCIN|CEFTRIAXONE|CEFEPIME|LEVOFLOXACIN|CIPROFLOXACIN"
 
@@ -140,6 +141,22 @@ med_taken_before_HAI <- dm %>%
 med_taken_before_HAI
 
 # Rather than number of PPI/GAS/anyGAS/LAX/ABX, should this just be a binary variable indicating receipt of PPI/GAS/anyGAS/LAX/ABX (coded as 1=yes or 0=no)? Section commented above handles this. Can remove this chunk of code if decide it's better to have frequency counts for PPI/GAS/anyGAS/LAX/ABX. 
+
+
+# REPLICATE CODE BUT KEEP FREQUENCY COUNTS OF ABX, INSTEAD OF CONVERTING TO BINARY VARIABLE (Y/N).
+med_taken_before_HAI_2 <- dm %>% 
+  left_join(med2, by = "deid_enc_id") %>%     # Left join dm and med tables on ID
+  filter(taken_time < HAI_first_date) %>%     # Filter for where  taken_time (for PPI, ABX, or GAS) < HAI_first_date
+  group_by(deid_enc_id) %>%                   # Group by ID
+  summarize(Num_of_PPI = sum(PPI),            # Count total number of PPI, GAS, anyGAS, LAX, ABX up to day before HAI_first_date
+            Num_of_GAS = sum(GAS),
+            Num_of_anyGAS = sum(anyGAS),
+            Num_of_LAX = sum(LAX),
+            Num_of_ABX = sum(ABX)) 
+
+num_of_abx <- med_taken_before_HAI_2 %>% select(c(deid_enc_id, Num_of_ABX))
+num_of_abx %>% filter(Num_of_ABX!=0)
+sum(med_taken_before_HAI_2$Num_of_ABX)
 ```
 
 # Clean `dx` table and create binary variable to indicate whether patient has diabetes; assign to table `dx`
