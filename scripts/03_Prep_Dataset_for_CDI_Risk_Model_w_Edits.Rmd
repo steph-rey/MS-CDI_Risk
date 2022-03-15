@@ -20,7 +20,7 @@ MINDSCAPE: Modeling of infectious network dynamics for surveillance, control and
 
 ## Description
 
-This file reads in necessary data and identifies variables of interest for building a multivariate logistic regression model to evaluate C diff risk among hospitalized patients. The resulting dataframe (`df.CDI`) contains binary indicators for CDI risk factors. Variables include:
+This file reads in necessary data and identifies variables of interest for building a multivariate logistic regression model to evaluate C diff risk among hospitalized patients. The resulting data frame (`df.CDI`) contains binary indicators for CDI risk factors. Variables include:
 
 -   `ID` --\> each patient's unique de-identified encounter ID
 -   `readmit` --\> whether patient had a prior hospital admission in the last 30 days
@@ -58,7 +58,7 @@ med <- read_delim("/Users/sreynolds2/Downloads/ucsf_data_pull_11.08.21/med admin
 dx <- read_delim("/Users/sreynolds2/Downloads/ucsf_data_pull_11.08.21/covid diagnoses 11.08.21.csv", delim = "|")
 ```
 
-# Clean `dm` table - deselect unnecessary variables, change to appropriate variable type
+# Clean `dm` table: Deselect unnecessary variables and change to appropriate variable type
 
 ```{r Clean `dm` table}
 dm <- dm %>% 
@@ -83,7 +83,7 @@ cat("Proportion of pts with HA-CDI out of total number of pts:",
     round(n_distinct(HA_cdif_pts$deid_enc_id)/(n_distinct(dm$deid_enc_id)), 4))
 ```
 
-# Create binary variables to indicate whether patients received PPI, GAS, LAX, and/or ABX; assign to tablte `med2`
+# Create binary variables to indicate whether patients received PPI, GAS, LAX, and/or ABX; assign to table `med2`
 
 **Alternative method - didn't work when I re-ran on 3/7/22, but keep just in case**
 
@@ -105,7 +105,7 @@ med2 <- med %>%
 
 ```{r Create binary vars to indicate whether pts received PPI, GAS, LAX, ABX}
 # Create vector for names of common antibiotics
-names_of_abx <- "VANCOMYCIN|CEFTRIAXONE|CEFEPIME|LEVOFLOXACIN|CIPROFLOXACIN"
+names_of_abx <- "VANCOMYCIN|CEFTRIAXONE|CEFEPIME|LEVOFLOXACIN|CIPROFLOXACIN|AMIKACIN|GENTAMICIN|NEOMYCIN-POLYMYXIN|TOBRAMYCIN|ERTAPENEM|IMIPENEM-CILASTATIN|MEROPENEM|MEROPENEM-VABORBACTAM|CEFAZOLIN|CEFOXITIN|CEFOTETAN|CEFUROXIME|CEFTAZIDIME|CEFTAROLINE|TOBRAMYCIN|DALBAVANCIN|ORITAVANCIN|CLINDAMYCIN|DAPTOMYCIN|AZITHROMYCIN|ERYTHROMYCIN|AZTREONAM|LINEZOLID|AMPICILLIN|AMPICILLIN-SULBACTAM|NAFCILLIN|PENICILLIN|PIPERACILLIN-TAZOBACTAM|BACITRACIN|NEOMYCIN-POLYMYXIN|GENTAMICIN-POLYMYXIN|TRIMETHOPRIM-SULFAMETHOXAZOLE|SULFAMETHOXAZOLE-TRIMETHOPRIM|DOXYCYCLINE|MINOCYCLINE|CLOFAZIMINE|ISONIAZID|RIFAMPIN|TIGECYCLINE|TRIMETHOPRIM|ACYCLOVIR|CASPOFUNGIN|LETERMOVIR|GANCICLOVIR|ACYCLOVIR|POSACONAZOLE|AMPHOTERICIN|AZTREONAM|GENTAMICIN|CASIRIVIMAB|CEFIDEROCOL|CEFTOLOZANE-TAZOBACTAM|CIDOFOVIR|CLINDAMYCIN|COLISTIMETHATE|ALBAVANCIN|ERAVACYCLINE|FOSCARNET|GENTAMICIN-POLYMYXIN|REMDESIVIR|ISAVUCONAZONIUM|LINEZOLID|MASTOID POWDER|MICAFUNGIN|CEFAZOLIN/CEFTAZIDIME|ORITAVANCIN|PENICILLIN|PERAMIVIR|TEDIZOID|TRIMETHOPRIM-SULFAMETHOXAZOLE|VORICONAZOLE|BACITRACIN|IBALIZUMAB-UIYK|CENICRIVIROC|BAMLANIVIMAB-ETESEVIMAB|BAMLANIVIMAB|BEZLOTOXUMAB"
 
 # Create variables to indicate whether pt received PPI, GAS, anyGAS, LAX and ABX
 med2 <- med %>% 
@@ -118,9 +118,28 @@ med2 <- med %>%
          ABX = if_else(thera_class %in% c("ANTIBIOTICS", "ANTIFUNGALS", "ANTIINFECTIVES/MISCELLANEOUS", "ANTIPARASITICS","ANTIVIRALS") | name %like% names_of_abx, 1, 0))
 ```
 
-# Create `med_taken_before_HAI` table to indicate whether pt received PPI, GAS, or ABX up to one day before HAI_first_date (aka when HACDIF culture was ordered)
+# Create `med_taken_before_HAI` table to indicate whether pt received PPI, GAS, or ABX up to one day before HAI_first_date\* \*
+
+\*`HAI_first_date` is when HACDIF culture was ordered
 
 ```{r Create `med_taken_before_HAI` table}
+
+full <- dm %>% 
+  left_join(med2, by = "deid_enc_id") %>% 
+  filter(ABX==0 & thera_class=="NULL") %>% 
+  select(deid_enc_id, name, thera_class, pharm_class)
+
+full %>% distinct(name, .keep_all = T) %>% write_csv("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/check_for_abx.csv")
+
+
+####
+full <- full %>% 
+  mutate(abx_yn = case_when(ABX==1 & (taken_time < HAI_first_date | is.na(HAI_first_date)) ~ 1))
+
+full %>% summarize(n_distinct(deid_enc_id)) 
+
+
+
 med_taken_before_HAI <- dm %>% 
   left_join(med2, by = "deid_enc_id") %>%     # Left join dm and med tables on ID
   filter(taken_time < HAI_first_date) %>%     # Filter for where  taken_time (for PPI, ABX, or GAS) < HAI_first_date
