@@ -1,0 +1,146 @@
+---
+title: "Odds Ratios for HA-CDI Risk Factors"
+author: "Steph Reynolds"
+date: "`r format(Sys.time(), '%b %d, %Y  %H:%M %p')`"
+output:
+  html_document:
+    toc: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+# Background
+
+## Project
+
+MINDSCAPE: Modeling of infectious network dynamics for surveillance, control and prevention enhancement
+
+## Description
+
+This file reads in `df.CDI which contains binary variables or risk factors associated with hospital-acquired C difficile (HA-CDIF) and computes the odds ratios for each risk factor. Variables include:
+
+-   `ID` --\> each patient's unique de-identified encounter ID
+-   `readmit` --\> whether patient had a prior hospital admission in the last 30 days
+-   `ED_dispo` --\> whether pt was admitted from Emergency Dept (ED) ???
+    -   NOTE: UNCLEAR! VERIFY / LEO WHAT THIS SHOULD BE TO INDICATE THAT PT WAS ADMITTED TO ED!
+-   `age_gte_65` --\> whether pt is aged 65 years or older at time of hospitalization
+-   `PPI` --\> whether pt received proton pump inhibitor (PPI) during hospital stay
+-   `GAS` --\> whether pt received gastric acid suppressants (GAS) during hospital stay
+    -   NOTE: This includes "ANTACIDS" and "HISTAMINE H2-RECEPTOR INHIBITORS"
+-   `anyGAS` --\> whether pt received PPI and/or GAS during hospital stay
+-   `LAX` --\> whether pt received laxatives (LAX) during hospital stay
+    -   NOTE: This includes "LAXATIVES AND CATHARTICS" and "LAXATIVES, LOCAL/RECTAL"
+-   `ABX` --\> whether pt received antibiotics during hospital stay
+    -   NOTE: THIS DOES NOT INCLUDE OUTPATIENT ABX - ONLY THOSE DURING HOSPITALIZATION.
+-   `DBM` --\> whether pt is diagnosed with diabetes mellitus (DBM)
+    -   NOTE: DO NOT USE! ONLY HAVE DBM DX FOR COVID-POSITIVE PTS.
+
+# Load required packages
+
+```{r Load required packages}
+library(tidyverse)
+```
+
+# Read in `df_CDI`
+```{r Read in data}
+df_CDI <- readRDS("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/df_CDI_risk_model.rds")
+```
+
+# Create 2x2 contingency table for age and CDIF and compute OR
+
+```{r Contingency table and OR for age and CDIF}
+table(df_CDI$HACDIF, df_CDI$age_gte_65)
+
+chisq.test(df_CDI$HACDIF, df_CDI$age_gte_65)
+
+fisher.test(df_CDI$HACDIF, df_CDI$age_gte_65)
+```
+
+**Results:**
+
+p\<0.05, thus, HACIF and AGE are NOT independent, aka they are related
+
+OR=1.64, meaning patients that are 65 and older are 1.64x more likely to be diagnosed with HA-CDIF than those who are under 65 years old
+
+# Create 2x2 contingency table for ABX and CDIF and compute OR
+
+```{r Contingency table and OR for ABX and CDIF}
+table(df_CDI$HACDIF, df_CDI$ABX)
+
+chisq.test(df_CDI$HACDIF, df_CDI$ABX)
+
+fisher.test(df_CDI$HACDIF, df_CDI$ABX)
+```
+
+**Results:**
+
+p\<0.05, thus, HACIF and ABX are DEPENDENT
+
+OR=4407, meaning patients who received ABX up to one day before HAI diagnosis are 4407x more likely to be diagnosed with HA-CDIF than those who do not receive ABX
+
+# Create 2x2 contingency table for GAS and CDIF and compute OR
+
+```{r Contingency table and OR for GAS and CDIF}
+table(df_CDI$HACDIF, df_CDI$GAS)
+
+chisq.test(df_CDI$HACDIF, df_CDI$GAS)
+
+fisher.test(df_CDI$HACDIF, df_CDI$GAS)
+```
+
+**Results:**
+
+p\<0.05, thus, HACIF and GAS are DEPENDENT
+
+OR=233, meaning patients who received gastric acid suppressants up to one day before HAI diagnosis are 233x more likely to be diagnosed with HA-CDIF than those who do not receive gastric acid suppressants
+
+# Create 2x2 contingency table for anyGAS and CDIF and compute OR
+
+```{r Contingency table and OR for anyGAS and CDIF}
+table(df_CDI$HACDIF, df_CDI$anyGAS)
+
+chisq.test(df_CDI$HACDIF, df_CDI$anyGAS)
+
+fisher.test(df_CDI$HACDIF, df_CDI$anyGAS)
+```
+
+**Results:**
+
+p\<0.05, thus, HACIF and anyGAS are DEPENDENT
+
+OR=343, meaning patients who received gastric acid suppressants and/or PPI up to one day before HAI diagnosis are 343x more likely to be diagnosed with HA-CDIF than those who do not receive gastric acid suppressants and/or PPI
+
+# Create 2x2 contingency table for LAX and CDIF and compute OR
+
+```{r Contingency table and OR for LAX and CDIF}
+table(df_CDI$HACDIF, df_CDI$LAX)
+
+chisq.test(df_CDI$HACDIF, df_CDI$LAX)
+
+fisher.test(df_CDI$HACDIF, df_CDI$LAX)
+```
+
+**Results:**
+
+p\<0.05, thus, HACIF and LAX are DEPENDENT
+
+OR=409, meaning patients who received laxatives up to one day before HAI diagnosis are 409x more likely to be diagnosed with HA-CDIF than those who do not receive laxatives
+
+# Create 2x2 contingency table for PPI and CDIF and compute OR
+
+```{r Contingency table and OR for PPI and CDIF}
+table(df_CDI$HACDIF, df_CDI$PPI)
+
+chisq.test(df_CDI$HACDIF, df_CDI$PPI)
+
+fisher.test(df_CDI$HACDIF, df_CDI$PPI)
+```
+
+**Results:**
+
+p\<0.05, thus, HACIF and PPI are DEPENDENT
+
+OR=141, meaning patients who received a proton pump inhibitor (PPI) up to one day before HAI diagnosis are 141x more likely to be diagnosed with HA-CDIF than those who do not receive PPI
