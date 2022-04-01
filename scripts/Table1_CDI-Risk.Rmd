@@ -1,0 +1,136 @@
+---
+title: "Table One for CDI Risk Model"
+author: "Steph Reynolds (Stephanie.Reynolds@ucsf.edu)"
+date: "`r format(Sys.time(), '%b %d, %Y  %H:%M %p')`"
+output:
+  html_document:
+    toc: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+# Background
+
+## Project
+
+MINDSCAPE: Modeling of infectious network dynamics for surveillance, control and prevention enhancement
+
+## Description
+
+This scripts reads in the CDI risk factor dataset (`df_CDI_risk_model.csv`) and creates a Table 1 showing frequencies for all predictors stratified by hospital-acquired C difficile diagnosis.
+
+## References
+
+-   `table1`: Tables of Descriptive Statistics in HTML ([Link](https://cran.r-project.org/web/packages/table1/))
+
+    -   Vignette: Using the table1 Package to Create HTML Tables of Descriptive Statistics (Rich, 2021)
+
+# Install and load required packages
+
+```{r Load required packages, include=F}
+#install.packages("table1")
+library(table1)
+library(tidyverse)
+```
+
+# Import and preview data
+
+```{r Read in df}
+# Read in data and assign to `df`
+df <- read_csv("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/df_CDI_risk_model.csv") %>% 
+  select(-c(ID, ED_dispo)) %>%     # Exclude ED_dispo and age (continuous) for now 
+  mutate_if(is.numeric, factor)
+
+# Preview dataset 
+glimpse(df)
+```
+
+# Reassign levels for categorical variables
+
+```{r Convert to proper variable types }
+# Reassign levels to No and Yes for factor variables
+for (i in colnames(df)){
+   levels(df[[i]]) <- c("No", "Yes")
+}
+
+# Check structure and var types
+str(df)
+```
+
+# Assign labels to categorical variables
+
+```{r Assign variable labels}
+label(df$HACDIF)       <- "Hospital-acquired C difficile infection"
+label(df$readmit)       <- "Readmission"
+label(df$age_gte_65)     <- "Age >= 65 years old"
+label(df$PPI) <- "Receipt of proton pump inhibitor (PPI)"
+label(df$GAS) <- "Receipt of gastric acid suppressant (GAS)"
+label(df$anyGAS) <- "Receipt of PPI or GAS" 
+label(df$LAX) <- "Receipt of laxative"
+label(df$ABX) <- "Receipt of antibiotic"
+label(df$AMR) <- "Receipt of antimicrobial"
+```
+
+# Create Table 1 showing frequencies for all predictors, stratified by hospital-acquired C diff diagnosis
+
+```{r table1 package}
+# Run table1 function with all predictors, stratified by HA-CDIF diagnosis 
+(t1 <- table1::table1(~ . | HACDIF, 
+                      data = df,
+                      topclass = "Rtable1-shade",
+                      rowlabelhead = "Positive hospital-acquired C difficile infection"))
+
+# Create function to compute p-vaue for categorical (or continuous) variables
+pvalue <- function(x, ...) {
+    # Construct vectors of data y, and groups (strata) g
+    y <- unlist(x)
+    g <- factor(rep(1:length(x), times=sapply(x, length)))
+    if (is.numeric(y)) {
+        # For numeric variables, perform a standard 2-sample t-test
+        p <- t.test(y ~ g)$p.value
+    } else {
+        # For categorical variables, perform a chi-squared test of independence
+        p <- chisq.test(table(y, g))$p.value
+    }
+    # Format the p-value, using an HTML entity for the less-than sign.
+    # The initial empty string places the output on the line below the variable label.
+    c("", sub("<", "&lt;", format.pval(p, digits=3, eps=0.001)))
+}
+
+# Re-run table1 and supply p-value function in the extra.col list argument 
+(t1.b <- table1::table1(~ . | HACDIF, 
+                      data = df, 
+                      topclass = "Rtable1-shade", 
+                      extra.col = list(`P-value` = pvalue)))
+
+kableExtra::footnote(knitr::kable(t1.b, "html"), number = c("PPI: proton pump inhibitors", "GAS: antacids, histamine H2-receptor inhibitors", "anyGAS: proton pump inhibitors, antacids, or histamine HA2-receptor inhibitors", "LAX: laxatives and cathartics, local/rectal laxatives", "ABX: antibiotics", "AMR: antimicrobials including antibiotics, antifungals, antiinfectives, antiparasitics, antivirals", "For those not captured in ABX therapeutic class, cross-validated with a list of specific ABX and AMR names"), number_title = "Footnotes:", threeparttable = T, title_format = c("bold", "italic"))
+
+kableExtra::add_footnote(knitr::kable(t1.b, "html"), label = c("PPI: proton pump inhibitors", "GAS: antacids, histamine H2-receptor inhibitors", "anyGAS: proton pump inhibitors, antacids, or histamine HA2-receptor inhibitors", "LAX: laxatives and cathartics, local/rectal laxatives", "ABX: antibiotics", "AMR: antimicrobials including antibiotics, antifungals, antiinfectives, antiparasitics, antivirals", "For those not captured in ABX therapeutic class, cross-validated with a list of specific ABX and AMR names"), notation = "number", threeparttable = T)
+```
+
+# Information for Table 1 footnotes:
+
+-   **PPI:** proton pump inhibitors
+
+-   **GAS:** antacids, histamine H2-receptor inhibitors
+
+-   **anyGAS:** proton pump inhibitors, antacids, or histamine HA2-receptor inhibitors
+
+-   **LAX:** laxatives and cathartics, local/rectal laxatives
+
+-   **ABX\*:** antibiotics
+
+-   **AMR\*:** antimicrobials including antibiotics, antifungals, antiinfectives, antiparasitics, antivirals
+
+*\*For those not captured in ABX therapeutic class, cross-validated with a list of specific ABX and AMR names.*
+
+## Other Important Definitions
+
+-   For patients with positive CDI culture, receipt of medications were coded as those received from time of admission to 1 day before CDI culture was ordered. For example, if a patient was admitted on 03-01-2021 and had a positive CDI culture ordered on 03-15-2021, his/her receipt of medications through 03-14-2021 were considered.
+
+-   For patients without a CDI culture (AKA no CDI diagnosis), receipt of medications were coded as those received from time of admission to discharge. For example, if a patient without HA-CDI was admitted on 03-01-2021, all medications until his/her discharge time were considered.
+
+-   Hospital-acquired CDI was defined as an abnormal/positive C difficile culture ordered greater than 48 hours after time of admission. In our analyses, if the difference in time between `CDI_order_time` and `admit_time` is greater than 48 hours, then `HACDIF` was coded as 1 or yes. This is what is commonly used in the literature and medical field.
