@@ -77,12 +77,14 @@ label(df$AMR) <- "Receipt of antimicrobial"
 # Create Table 1 showing frequencies for all predictors, stratified by hospital-acquired C diff diagnosis
 
 ```{r table1 package}
-# Run table1 function with all predictors, stratified by HA-CDIF diagnosis 
+# Create Table 1 with all predictors, stratified by HA-CDIF diagnosis 
 (t1 <- table1::table1(~ . | HACDIF, 
                       data = df,
                       topclass = "Rtable1-shade",
-                      rowlabelhead = "Positive hospital-acquired C difficile infection"))
+                      footnote = c("PPI: proton pump inhibitors", "GAS: antacids, histamine H2-receptor inhibitors", "anyGAS: proton pump inhibitors, antacids, or histamine HA2-receptor inhibitors", "LAX: laxatives and cathartics, local/rectal laxatives", "ABX: antibiotics", "AMR: antimicrobials including antibiotics, antifungals, antiinfectives, antiparasitics, antivirals"),
+                      rowlabelhead = "Positive HA C. difficile infection"))
 
+# Re-create Table 1 with additional column for p-test of Chi Square Test testing independence between HACDIF and predictor(s) 
 # Create function to compute p-vaue for categorical (or continuous) variables
 pvalue <- function(x, ...) {
     # Construct vectors of data y, and groups (strata) g
@@ -104,11 +106,14 @@ pvalue <- function(x, ...) {
 (t1.b <- table1::table1(~ . | HACDIF, 
                       data = df, 
                       topclass = "Rtable1-shade", 
-                      extra.col = list(`P-value` = pvalue)))
+                      extra.col = list(`P-value` = pvalue),
+                      footnote = c("PPI: proton pump inhibitors", "GAS: antacids, histamine H2-receptor inhibitors", "anyGAS: proton pump inhibitors, antacids, or histamine HA2-receptor inhibitors", "LAX: laxatives and cathartics, local/rectal laxatives", "ABX: antibiotics", "AMR: antimicrobials including antibiotics, antifungals, antiinfectives, antiparasitics, antivirals"),
+                      rowlabelhead = ""))
 
-kableExtra::footnote(knitr::kable(t1.b, "html"), number = c("PPI: proton pump inhibitors", "GAS: antacids, histamine H2-receptor inhibitors", "anyGAS: proton pump inhibitors, antacids, or histamine HA2-receptor inhibitors", "LAX: laxatives and cathartics, local/rectal laxatives", "ABX: antibiotics", "AMR: antimicrobials including antibiotics, antifungals, antiinfectives, antiparasitics, antivirals", "For those not captured in ABX therapeutic class, cross-validated with a list of specific ABX and AMR names"), number_title = "Footnotes:", threeparttable = T, title_format = c("bold", "italic"))
+# Attempts to Include Footnotes: 
+#kableExtra::footnote(knitr::kable(t1.b, "html"), number = c("PPI: proton pump inhibitors", "GAS: antacids, histamine H2-receptor inhibitors", "anyGAS: proton pump inhibitors, antacids, or histamine HA2-receptor inhibitors", "LAX: laxatives and cathartics, local/rectal laxatives", "ABX: antibiotics", "AMR: antimicrobials including antibiotics, antifungals, antiinfectives, antiparasitics, antivirals", "For those not captured in ABX therapeutic class, cross-validated with a list of specific ABX and AMR names"), number_title = "Footnotes:", threeparttable = T, title_format = c("bold", "italic"))
 
-kableExtra::add_footnote(knitr::kable(t1.b, "html"), label = c("PPI: proton pump inhibitors", "GAS: antacids, histamine H2-receptor inhibitors", "anyGAS: proton pump inhibitors, antacids, or histamine HA2-receptor inhibitors", "LAX: laxatives and cathartics, local/rectal laxatives", "ABX: antibiotics", "AMR: antimicrobials including antibiotics, antifungals, antiinfectives, antiparasitics, antivirals", "For those not captured in ABX therapeutic class, cross-validated with a list of specific ABX and AMR names"), notation = "number", threeparttable = T)
+#kableExtra::add_footnote(knitr::kable(t1.b, "html"), label = c("PPI: proton pump inhibitors", "GAS: antacids, histamine H2-receptor inhibitors", "anyGAS: proton pump inhibitors, antacids, or histamine HA2-receptor inhibitors", "LAX: laxatives and cathartics, local/rectal laxatives", "ABX: antibiotics", "AMR: antimicrobials including antibiotics, antifungals, antiinfectives, antiparasitics, antivirals", "For those not captured in ABX therapeutic class, cross-validated with a list of specific ABX and AMR names"), notation = "number", threeparttable = T)
 ```
 
 # Information for Table 1 footnotes:

@@ -30,13 +30,17 @@ library(performance)
 # Import `df_CDI_risk_model.csv` and select only necessary variables
 ```{r Import data}
 df <- read_csv("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/df_CDI_risk_model.csv") %>% 
-  select(-c(DBM, ED_dispo, HAI_first_date, ID))
+  select(-c(ID, age, ED_dispo)) %>% 
+  mutate_if(is.numeric, factor)
 ```
 
 # Build multivariate logistic regression model and assign to `m`
 ```{r Build multivariate log reg model}
 m <- glm(data = df, formula = HACDIF ~ readmit + age_gte_65 + PPI + GAS + anyGAS + LAX + ABX, family = binomial)
 summary(m)
+
+m.amr <- glm(data = df, formula = HACDIF ~ readmit + age_gte_65 + PPI + GAS + anyGAS + LAX + AMR, family = binomial)
+summary(m.amr)
 ```
 
 # Check model performance: Calculate AIC, R2, and plot ROC

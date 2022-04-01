@@ -11,12 +11,11 @@ df <- read_csv("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/
 
 # Create dataset with only relevant parameters (readmit, age, cdif, ppi, gas, abx) ---- 
 df <- df %>% 
-  select_if(is.numeric) %>% 
-  select(-DBM)
+  select(-c(ID, age, ED_dispo))
 
 # Multivariate logistic regression ----
   # m1 includes all parameters
-  m1 <- glm(data = df, formula = HACDIF ~ readmit + age_gte_65 + PPI + GAS + anyGAS + LAX + ABX, family = binomial)
+  m1 <- glm(data = df, formula = HACDIF ~ ., family = binomial)
   summary(m1)
   model_performance(m1)
   
@@ -111,3 +110,10 @@ compare_performance(m1, m2, m3, m4, rank = T)
   check_singularity(m4)
       # No singularity for m1-m4
 
+  # Calculate and print Brier scores for m1-m4
+  cat("Brier Score for M1:", round(BrierScore(m1), 4))
+  cat("Brier Score for M2:", round(BrierScore(m2), 4))
+  cat("Brier Score for M3:", round(BrierScore(m3), 4))
+  cat("Brier Score for M4:", round(BrierScore(m4), 4))
+  
+  

@@ -79,7 +79,23 @@ fisher.test(df_CDI$HACDIF, df_CDI$ABX)
 
 p\<0.05, thus, HACIF and ABX are DEPENDENT
 
-OR=4407, meaning patients who received ABX up to one day before HAI diagnosis are 4407x more likely to be diagnosed with HA-CDIF than those who do not receive ABX
+OR=34.9, meaning patients who received ABX up to one day before HAI diagnosis are 34.9x more likely to be diagnosed with HA-CDIF than those who do not receive ABX
+
+# Create 2x2 contingency table for AMR and CDIF and compute OR
+
+```{r Contingency table and OR for AMR and CDIF}
+table(df_CDI$HACDIF, df_CDI$AMR)
+
+chisq.test(df_CDI$HACDIF, df_CDI$AMR)
+
+fisher.test(df_CDI$HACDIF, df_CDI$AMR)
+```
+
+**Results:**
+
+p\<0.05, thus, HACIF and ABX are DEPENDENT
+
+OR=29.1, meaning patients who received AMR up to one day before HAI diagnosis are 29.1 more likely to be diagnosed with HA-CDIF than those who do not receive AMR
 
 # Create 2x2 contingency table for GAS and CDIF and compute OR
 
@@ -95,7 +111,7 @@ fisher.test(df_CDI$HACDIF, df_CDI$GAS)
 
 p\<0.05, thus, HACIF and GAS are DEPENDENT
 
-OR=233, meaning patients who received gastric acid suppressants up to one day before HAI diagnosis are 233x more likely to be diagnosed with HA-CDIF than those who do not receive gastric acid suppressants
+OR=3.71, meaning patients who received gastric acid suppressants up to one day before HAI diagnosis are 3.71x more likely to be diagnosed with HA-CDIF than those who do not receive gastric acid suppressants
 
 # Create 2x2 contingency table for anyGAS and CDIF and compute OR
 
@@ -111,7 +127,7 @@ fisher.test(df_CDI$HACDIF, df_CDI$anyGAS)
 
 p\<0.05, thus, HACIF and anyGAS are DEPENDENT
 
-OR=343, meaning patients who received gastric acid suppressants and/or PPI up to one day before HAI diagnosis are 343x more likely to be diagnosed with HA-CDIF than those who do not receive gastric acid suppressants and/or PPI
+OR=4.44, meaning patients who received gastric acid suppressants and/or PPI up to one day before HAI diagnosis are 4.44x more likely to be diagnosed with HA-CDIF than those who do not receive gastric acid suppressants and/or PPI
 
 # Create 2x2 contingency table for LAX and CDIF and compute OR
 
@@ -127,7 +143,7 @@ fisher.test(df_CDI$HACDIF, df_CDI$LAX)
 
 p\<0.05, thus, HACIF and LAX are DEPENDENT
 
-OR=409, meaning patients who received laxatives up to one day before HAI diagnosis are 409x more likely to be diagnosed with HA-CDIF than those who do not receive laxatives
+OR=2.01, meaning patients who received laxatives up to one day before HAI diagnosis are 2.01 more likely to be diagnosed with HA-CDIF than those who do not receive laxatives
 
 # Create 2x2 contingency table for PPI and CDIF and compute OR
 
@@ -143,4 +159,21 @@ fisher.test(df_CDI$HACDIF, df_CDI$PPI)
 
 p\<0.05, thus, HACIF and PPI are DEPENDENT
 
-OR=141, meaning patients who received a proton pump inhibitor (PPI) up to one day before HAI diagnosis are 141x more likely to be diagnosed with HA-CDIF than those who do not receive PPI
+OR=3.11, meaning patients who received a proton pump inhibitor (PPI) up to one day before HAI diagnosis are 3.11 more likely to be diagnosed with HA-CDIF than those who do not receive PPI
+
+# Create 2x2 contingency table for readmit and CDIF and compute OR
+
+```{r Contingency table and OR for readmit and CDIF}
+table(df_CDI$HACDIF, df_CDI$readmit)
+
+chisq.test(df_CDI$HACDIF, df_CDI$readmit)
+
+fisher.test(df_CDI$HACDIF, df_CDI$readmit)
+```
+
+**Results:**
+
+p\<0.05, thus, HACIF and PPI are DEPENDENT
+
+OR=1.92, meaning patients who were readmitted are 1.92 more likely to be diagnosed with HA-CDIF than those who were not 
+
