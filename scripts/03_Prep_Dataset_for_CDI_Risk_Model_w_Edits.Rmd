@@ -26,7 +26,7 @@ This file reads in necessary data and identifies variables of interest for build
 -   `readmit` --\> whether patient had a prior hospital admission in the last 30 days
 -   `ED_dispo` --\> whether pt was admitted from Emergency Dept (ED) ???
     -   NOTE: UNCLEAR! VERIFY / LEO WHAT THIS SHOULD BE TO INDICATE THAT PT WAS ADMITTED TO ED!
--   `age_gte_65` --\> whether pt is aged 65 years or older at time of hospitalization
+-   `age_gte_65` -\> whether pt is aged 65 years or older at time of hospitalization
 -   `PPI` --\> whether pt received proton pump inhibitor (PPI) during hospital stay
 -   `GAS` --\> whether pt received gastric acid suppressants (GAS) during hospital stay
     -   NOTE: This includes "ANTACIDS" and "HISTAMINE H2-RECEPTOR INHIBITORS"
@@ -34,7 +34,9 @@ This file reads in necessary data and identifies variables of interest for build
 -   `LAX` --\> whether pt received laxatives (LAX) during hospital stay
     -   NOTE: This includes "LAXATIVES AND CATHARTICS" and "LAXATIVES, LOCAL/RECTAL"
 -   `ABX` --\> whether pt received antibiotics during hospital stay
-    -   NOTE: THIS DOES NOT INCLUDE OUTPATIENT ABX - ONLY THOSE DURING HOSPITALIZATION.
+    -   For pts with a positive CDIF culture, only count ABX received up to day prior to `order_time`. For pts without CDI, count abx from time of admission to discharge.
+-   `AMR` -\> whether pt received antimicrobials during hospital stay
+    -   For pts with a positive CDIF culture, only count AMR received up to day prior to `order_time`. For pts without CDI, count abx from time of admission to discharge.
 -   `DBM` --\> whether pt is diagnosed with diabetes mellitus (DBM)
     -   NOTE: DO NOT USE! ONLY HAVE DBM DX FOR COVID-POSITIVE PTS.
 
@@ -47,16 +49,16 @@ library(tableone) # create categorical tables
 library(DescTools) # %like% operator
 ```
 
-# Import `dm`, `med`, and `lab` tables
+# Import `dm`, `med`, and `lab` tables and select only necessary variables
 
 ```{r Import data, message = F}
 dm <- read_delim("/Users/sreynolds2/Downloads/ucsf_data_pull_11.08.21/demographics and event table 11.08.21.csv", delim = "|")
 
-med <- read_delim("/Users/sreynolds2/Downloads/ucsf_data_pull_11.08.21/med admin table 11.08.21.csv", delim = "|")
+#med <- read_delim("/Users/sreynolds2/Downloads/ucsf_data_pull_11.08.21/med admin table 11.08.21.csv", delim = "|") %>% select(deid_enc_id, name, thera_class, pharm_class, taken_time)
 
-lab <- read_delim("/Users/sreynolds2/Downloads/ucsf_data_pull_11.08.21/lab results 11.08.21.csv", delim = "|")
+lab <- read_delim("/Users/sreynolds2/Downloads/ucsf_data_pull_11.08.21/lab results 11.08.21.csv", delim = "|") %>% select(deid_enc_id, COMPONENT_ID, Abnormal, ORD_VALUE, order_time, RESULT_TIME, lab_concept)
 
-dx <- read_delim("/Users/sreynolds2/Downloads/ucsf_data_pull_11.08.21/covid diagnoses 11.08.21.csv", delim = "|")
+dx <- read_delim("/Users/sreynolds2/Downloads/ucsf_data_pull_11.08.21/covid diagnoses 11.08.21.csv", delim = "|") %>% select(deid_enc_id, DX_NAME, dx_group)
 ```
 
 # Clean `lab` table and identify all patients who had an abnormal CDIF test
@@ -79,16 +81,7 @@ cdif_pts <- lab %>%
   distinct(deid_enc_id, order_time, RESULT_TIME) %>% 
   rename(CDIF_order_time = order_time,
          CDIF_result_time = RESULT_TIME)
-
-# Identify all patients who had an abnormal diabetes test and assign to table `diabetes_pts`
-diabetes_pts <- lab %>% 
-  filter(lab_concept == "diabetes" & 
-           Abnormal != "NULL") %>% 
-  select(deid_enc_id, lab_concept, Abnormal, order_time, RESULT_TIME) %>% 
-  distinct(deid_enc_id, Abnormal)
 ```
-
-#  
 
 # Join `dm` and `cdif_pts` tables and create new vars to indicate age\>=65, readmit status, and hospital-acquired CDIF
 
@@ -97,12 +90,12 @@ diabetes_pts <- lab %>%
 ```{r Join `dm` and `cdif_pts` tables}
 df <- dm %>% 
   full_join(cdif_pts, by = "deid_enc_id") %>% # Join `dm` with `cdif_pts` table
-  select(deid_enc_id, age, readmit, ED_dispo, admit_time, CDIF_order_time, CDIF_result_time) %>%
-  mutate_at(c("admit_time", "CDIF_order_time", "CDIF_result_time"), ymd_hms) %>% 
+  select(deid_enc_id, age, readmit, ED_dispo, admit_time, CDIF_order_time, CDIF_result_time, discharge_time) %>%
+  mutate_at(c("admit_time", "CDIF_order_time", "discharge_time"), ymd_hms) %>% 
   mutate_at(c("readmit", "ED_dispo"), factor) %>%
   mutate(age_gte_65 = if_else(age>=65, 1, 0),
          readmit = if_else(readmit=="Yes", 1, 0),
-         HACDIF = case_when((difftime(CDIF_order_time, admit_time, units = "hours")) > 48 ~ 1, TRUE ~ 0)) # should this be difference in order_time or result_time???
+         HACDIF = case_when((difftime(CDIF_order_time, admit_time, units = "hours")) > 48 ~ 1, TRUE ~ 0))
 
 # Calculate proportion of encounter IDs with HACDIF 
 cat("Proportion of total encounter IDs with hospital-acquired CDIF:",
@@ -111,94 +104,86 @@ cat("Proportion of total encounter IDs with hospital-acquired CDIF:",
 
 # Create binary variables to indicate whether patients received PPI, GAS, LAX, and/or ABX; assign to table `med2`
 
-```{r Create binary vars to indicate whether pts received PPI, GAS, LAX, ABX}
-# Create vector for names of common antibiotics
-names_of_abx <- "VANCOMYCIN|CEFTRIAXONE|CEFEPIME|LEVOFLOXACIN|CIPROFLOXACIN|AMIKACIN|GENTAMICIN|NEOMYCIN-POLYMYXIN|TOBRAMYCIN|ERTAPENEM|IMIPENEM-CILASTATIN|MEROPENEM|MEROPENEM-VABORBACTAM|CEFAZOLIN|CEFOXITIN|CEFOTETAN|CEFUROXIME|CEFTAZIDIME|CEFTAROLINE|TOBRAMYCIN|DALBAVANCIN|ORITAVANCIN|CLINDAMYCIN|DAPTOMYCIN|AZITHROMYCIN|ERYTHROMYCIN|AZTREONAM|LINEZOLID|AMPICILLIN|AMPICILLIN-SULBACTAM|NAFCILLIN|PENICILLIN|PIPERACILLIN-TAZOBACTAM|BACITRACIN|NEOMYCIN-POLYMYXIN|GENTAMICIN-POLYMYXIN|TRIMETHOPRIM-SULFAMETHOXAZOLE|SULFAMETHOXAZOLE-TRIMETHOPRIM|DOXYCYCLINE|MINOCYCLINE|CLOFAZIMINE|ISONIAZID|RIFAMPIN|TIGECYCLINE|TRIMETHOPRIM|ACYCLOVIR|CASPOFUNGIN|LETERMOVIR|GANCICLOVIR|ACYCLOVIR|POSACONAZOLE|AMPHOTERICIN|AZTREONAM|GENTAMICIN|CASIRIVIMAB|CEFIDEROCOL|CEFTOLOZANE-TAZOBACTAM|CIDOFOVIR|CLINDAMYCIN|COLISTIMETHATE|ALBAVANCIN|ERAVACYCLINE|FOSCARNET|GENTAMICIN-POLYMYXIN|REMDESIVIR|ISAVUCONAZONIUM|LINEZOLID|MASTOID POWDER|MICAFUNGIN|CEFAZOLIN/CEFTAZIDIME|ORITAVANCIN|PENICILLIN|PERAMIVIR|TEDIZOID|TRIMETHOPRIM-SULFAMETHOXAZOLE|VORICONAZOLE|BACITRACIN|IBALIZUMAB-UIYK|CENICRIVIROC|BAMLANIVIMAB-ETESEVIMAB|BAMLANIVIMAB|BEZLOTOXUMAB"
-# need to confirm this list of abx names 
+```{r Create binary vars to indicate whether pts received PPI, GAS, LAX, ABX, eval = F}
+# Vector of antibiotic names - not captured by filtering thera_class=='ANTIBIOTICS' since thera_class=='NULL'
+names_abx <- "VANCOMYCIN|CEFTRIAXONE|CEFEPIME|LEVOFLOXACIN|CIPROFLOXACIN|AMIKACIN|GENTAMICIN|NEOMYCIN-POLYMYXIN|TOBRAMYCIN|ERTAPENEM|IMIPENEM-CILASTATIN|MEROPENEM|MEROPENEM-VABORBACTAM|CEFAZOLIN|CEFOXITIN|CEFOTETAN|CEFUROXIME|CEFTAZIDIME|CEFTAROLINE|TOBRAMYCIN|DALBAVANCIN|ORITAVANCIN|CLINDAMYCIN|DAPTOMYCIN|AZITHROMYCIN|ERYTHROMYCIN|AZTREONAM|LINEZOLID|AMPICILLIN|AMPICILLIN-SULBACTAM|NAFCILLIN|PENICILLIN|PIPERACILLIN-TAZOBACTAM|BACITRACIN|NEOMYCIN-POLYMYXIN|GENTAMICIN-POLYMYXIN|TRIMETHOPRIM-SULFAMETHOXAZOLE|SULFAMETHOXAZOLE-TRIMETHOPRIM|DOXYCYCLINE|MINOCYCLINE|CLOFAZIMINE|ISONIAZID|RIFAMPIN|TIGECYCLINE|TRIMETHOPRIM|AZTREONAM|GENTAMICIN|CEFTOLOZANE-TAZOBACTAM|CLINDAMYCIN|ALBAVANCIN|ERAVACYCLINE|GENTAMICIN-POLYMYXIN|CEFAZOLIN/CEFTAZIDIME|ORITAVANCIN|PENICILLIN|TEDIZOID|CEFIDEROCOL|COLISTIMETHATE"
 
-# Create variables to indicate whether pt received PPI, GAS, anyGAS, LAX and ABX
-med2 <- med %>% 
-  select(deid_enc_id, name, thera_class, pharm_class, taken_time) %>% 
+# Vector of antimicrobial names 
+names_amr <- "VANCOMYCIN|CEFTRIAXONE|CEFEPIME|LEVOFLOXACIN|CIPROFLOXACIN|AMIKACIN|GENTAMICIN|NEOMYCIN|POLYMYXIN|TOBRAMYCIN|ERTAPENEM|IMIPENEM|CILASTATIN|MEROPENEM|MEROPENEM|VABORBACTAM|CEFAZOLIN|CEFOXITIN|CEFOTETAN|CEFUROXIME|CEFTAZIDIME|CEFTAROLINE|TOBRAMYCIN|DALBAVANCIN|ORITAVANCIN|CLINDAMYCIN|DAPTOMYCIN|AZITHROMYCIN|ERYTHROMYCIN|AZTREONAM|LINEZOLID|AMPICILLIN|AMPICILLIN|SULBACTAM|NAFCILLIN|PENICILLIN|PIPERACILLIN|TAZOBACTAM|BACITRACIN|NEOMYCIN|POLYMYXIN|GENTAMICIN|POLYMYXIN|TRIMETHOPRIM|SULFAMETHOXAZOLE|SULFAMETHOXAZOLE|TRIMETHOPRIM|DOXYCYCLINE|MINOCYCLINE|CLOFAZIMINE|ISONIAZID|RIFAMPIN|TIGECYCLINE|TRIMETHOPRIM|AZTREONAM|GENTAMICIN|CEFTOLOZANE|TAZOBACTAM|CLINDAMYCIN|ALBAVANCIN|ERAVACYCLINE|GENTAMICIN|POLYMYXIN|CEFAZOLIN/CEFTAZIDIME|ORITAVANCIN|PENICILLIN|TEDIZOID|CEFIDEROCOL|COLISTIMETHATE|ACYCLOVIR|LETERMOVIR|GANCICLOVIR|ACYCLOVIR|CIDOFOVIR|FOSCARNET|REMDESIVIR|PERAMIVIR|CASPOFUNGIN|POSACONAZOLE|AMPHOTERICIN|ISAVUCONAZONIUM|MICAFUNGIN|VORICONAZOLE"
+
+# Create binary variables to indicate whether pt received PPI, GAS, anyGAS, LAX, ABX, and AMR
+  # NOTE: This code takes ~ 10 minutes to run; consider putting into separate script
+meds_binary <- med %>% 
   mutate_at(c("thera_class", "pharm_class"), factor) %>%
   mutate(PPI = if_else(pharm_class=="PROTON-PUMP INHIBITORS" | name %like% "PANTOPRAZOLE", 1, 0),    
          GAS = if_else(pharm_class %in% c("ANTACIDS", "HISTAMINE H2-RECEPTOR INHIBITORS"), 1, 0),
-         anyGAS = if_else(pharm_class %in% c("PROTON-PUMP INHIBITORS", "ANTACIDS", "HISTAMINE H2-RECEPTOR INHIBITORS") | name %like% "PANTOPRAZOLE", 1, 0),
+         anyGAS = if_else(pharm_class %in% c("PROTON-PUMP INHIBITORS", "ANTACIDS", "HISTAMINE H2-RECEPTOR INHIBITORS") |
+                          name %like% "PANTOPRAZOLE", 1, 0),
          LAX = if_else(pharm_class %in% c("LAXATIVES AND CATHARTICS", "LAXATIVES, LOCAL/RECTAL"), 1, 0),
-         ABX = if_else(thera_class %in% c("ANTIBIOTICS", "ANTIFUNGALS", "ANTIINFECTIVES/MISCELLANEOUS", "ANTIPARASITICS","ANTIVIRALS") | name %like% names_of_abx, 1, 0)) %>% 
+         ABX = if_else(thera_class=="ANTIBIOTICS" | name %like% names_abx, 1, 0),
+         AMR = if_else(thera_class %in% c("ANTIBIOTICS","ANTIFUNGALS","ANTIINFECTIVES/MISCELLANEOUS",
+                                          "ANTIPARASITICS","ANTIVIRALS") | name %like% names_amr, 1, 0)) %>% 
   select(-c(thera_class, pharm_class))
+
+# Save as CSV and RDS file - that way, can just read in the file and don't have to keep re-running code 
+write_csv(meds_binary, "/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/meds_binary.csv")
+saveRDS(meds_binary, "/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/meds_binary.rds")
 ```
 
-# Create `med_taken_before_HAI` table to indicate whether pt received PPI, GAS, or ABX up to one day before CDIF_order_time
+# Create `med_taken_before_HAI` table to indicate whether pt received PPI, GAS, ABX, or AMR up to one day before CDIF_order_time
 
 **NOTE TO SELF:** Need to edit this section so that all ABX/PPI/GAS are counted, regardless of whether they were received up to one day before `CDIF_order_time`. Need to edit filter (line 3).
 
-```{r Create `med_taken_before_HAI` table}
-# ANOTHER ATTEMPT
-sample <- df %>% 
-  left_join(med2, by = "deid_enc_id") %>% 
+```{r Create `med_taken_before_HAI` table, eval = F}
+# Read in `meds_binary` table 
+meds_binary <- readRDS("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/meds_binary.rds")
+
+# For those with HA-CDIF, check whether they received any meds the calendar day before `CDIF_order_time`
+meds_before_order <- df %>% 
+  filter(HACDIF==1) %>%
+  left_join(meds_binary, by = "deid_enc_id") %>% 
+  mutate_at(c("CDIF_order_time", "taken_time"), as.Date) %>% 
   group_by(deid_enc_id) %>%
   mutate(PPI = if_else(sum(PPI)>=1, 1, 0),
          GAS = if_else(sum(GAS)>=1, 1, 0),
          anyGAS = if_else(sum(anyGAS)>=1, 1, 0),
          LAX = if_else(sum(LAX)>=1, 1, 0),
          ABX = if_else(sum(ABX)>=1, 1, 0),
-         taken_after_order = if_else(taken_time > CDIF_order_time, 1, 0))
+         AMR = if_else(sum(AMR)>=1, 1, 0),
+         taken_before_order = if_else(taken_time < CDIF_order_time, 1, 0))
 
-# PRIOR ATTEMPT 
-med_taken_before_HACDIF <- df %>% 
-  left_join(med2, by = "deid_enc_id") %>%     # Left join dm and med tables on ID
-  filter(taken_time < CDIF_order_time) %>%    # Filter for where  taken_time (for PPI, ABX, or GAS) < CDIF_order_time
-  group_by(deid_enc_id) %>%                   # Group by ID
-  summarize(Num_of_PPI = sum(PPI),            # Count total number of PPI, GAS, anyGAS, LAX, ABX up to day before HCDIF
-            Num_of_GAS = sum(GAS),
-            Num_of_anyGAS = sum(anyGAS),
-            Num_of_LAX = sum(LAX),
-            Num_of_ABX = sum(ABX)) %>% 
-  mutate(PPI = if_else(Num_of_PPI>=1, 1, 0),  # Transform to binary vars, indicating yes/no whether pt received PPI, GAS, or ABX
+# For those without CDIF culture, check whether they received any meds the calendar day before `CDIF `CDIF_order_time`
+meds_before_disc <- df %>% 
+  filter(is.na(CDIF_order_time)) %>%  # filter for missing order_time -- meaning pts with no CDIF order
+  left_join(meds_binary, by = "deid_enc_id") %>% 
+  group_by(deid_enc_id) %>% 
+  mutate(PPI = if_else(sum(PPI)>=1, 1, 0),
          GAS = if_else(sum(GAS)>=1, 1, 0),
          anyGAS = if_else(sum(anyGAS)>=1, 1, 0),
          LAX = if_else(sum(LAX)>=1, 1, 0),
-         ABX = if_else(sum(ABX)>=1, 1, 0)) %>% 
-  select(deid_enc_id, PPI, GAS, anyGAS, LAX, ABX)   # Only keep relevant variables
+         ABX = if_else(sum(ABX)>=1, 1, 0),
+         AMR = if_else(sum(AMR)>=1, 1, 0))
 
-# Rather than number of PPI/GAS/anyGAS/LAX/ABX, should this just be a binary variable indicating receipt of PPI/GAS/anyGAS/LAX/ABX (coded as 1=yes or 0=no)? Section commented above handles this. Can remove this chunk of code if decide it's better to have frequency counts for PPI/GAS/anyGAS/LAX/ABX. 
+# Merge/bind rows, select binary med variables, and keep only unique encounters 
+meds_before <- meds_before_disc %>% 
+  rbind(meds_before_order) %>% 
+  mutate(PPI = if_else(PPI==1 & (taken_before_order==1 | is.na(taken_before_order)), 1, 0),
+         GAS = if_else(GAS==1 & (taken_before_order==1 | is.na(taken_before_order)), 1, 0),
+         anyGAS = if_else(anyGAS==1 & (taken_before_order==1 | is.na(taken_before_order)), 1, 0),
+         LAX = if_else(LAX==1 & (taken_before_order==1 | is.na(taken_before_order)), 1, 0),
+         ABX = if_else(ABX==1 & (taken_before_order==1 | is.na(taken_before_order)), 1, 0),
+         AMR = if_else(AMR==1 & (taken_before_order==1 | is.na(taken_before_order)), 1, 0)) %>% 
+  select(deid_enc_id, PPI:AMR) %>% 
+  distinct(deid_enc_id, .keep_all = T)
 
-
-#### Random code - don't delete yet 
-full <- dm %>% 
-  left_join(med2, by = "deid_enc_id") %>% 
-  filter(ABX==0 & thera_class=="NULL") %>% 
-  select(deid_enc_id, name, thera_class, pharm_class)
-
-full %>% distinct(name, .keep_all = T) %>% write_csv("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/check_for_abx.csv")
-
-
-#### Random code - don't delete yet 
-full <- full %>% 
-  mutate(abx_yn = case_when(ABX==1 & (taken_time < HAI_first_date | is.na(HAI_first_date)) ~ 1))
-
-full %>% summarize(n_distinct(deid_enc_id)) 
-
-
-# REPLICATE CODE BUT KEEP FREQUENCY COUNTS OF ABX, INSTEAD OF CONVERTING TO BINARY VARIABLE (Y/N).
-med_taken_before_HAI_2 <- dm %>% 
-  left_join(med2, by = "deid_enc_id") %>%     # Left join dm and med tables on ID
-  filter(taken_time < HAI_first_date) %>%     # Filter for where  taken_time (for PPI, ABX, or GAS) < HAI_first_date
-  group_by(deid_enc_id) %>%                   # Group by ID
-  summarize(Num_of_PPI = sum(PPI),            # Count total number of PPI, GAS, anyGAS, LAX, ABX up to day before HAI_first_date
-            Num_of_GAS = sum(GAS),
-            Num_of_anyGAS = sum(anyGAS),
-            Num_of_LAX = sum(LAX),
-            Num_of_ABX = sum(ABX)) 
-
-num_of_abx <- med_taken_before_HAI_2 %>% select(c(deid_enc_id, Num_of_ABX))
-num_of_abx %>% filter(Num_of_ABX!=0)
-sum(med_taken_before_HAI_2$Num_of_ABX)
+# Save as CSV and RDS file - that way, can just read in the file and don't have to keep re-running code 
+write_csv(meds_before, "/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/meds_before_order_or_disc.csv")
+saveRDS(meds_before, "/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/meds_before_order_or_disc.rds")
 ```
 
 # Clean `dx` table and create binary variable to indicate whether patient has diabetes; assign to table `dbm`
 
-```{r Clean `dx` table, create table to indicate DBM dx}
+```{r Clean `dx` table, create table to indicate DBM dx, eval = F}
 dbm <- dx %>% 
   mutate(DBM = if_else(dx_group=="DIABETES MELLITUS", 1, 0)) %>%
   group_by(deid_enc_id) %>% 
@@ -212,40 +197,63 @@ dbm <- dx %>%
 # Join `df`, `med_taken_before_HACDIF`, and `dbm` tables and assign to `df_CDI`
 
 ```{r Merge all tables}
+# Read in `meds_before_order_or_disc` 
+meds_before <- readRDS("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/meds_before_order_or_disc.rds")
+
+# Updated Code from 3/31/2022
 df_CDI <- df %>% 
-  left_join(med_taken_before_HACDIF, by = 'deid_enc_id') %>% # Left join dm and med_taken_before_HACIDF
-  left_join(dbm, by = "deid_enc_id") %>%          # Left join dm and dbm
-  mutate(PPI = ifelse(is.na(PPI), 0, PPI),        # Reassign NA values for PPI:DBM to 0
+  left_join(meds_before, by = 'deid_enc_id') %>%   # Left join dm and meds_before
+  mutate(PPI = ifelse(is.na(PPI), 0, PPI),         # Reassign NA values for PPI:AMR to 0
          GAS = ifelse(is.na(GAS), 0, GAS),
          anyGAS = ifelse(is.na(anyGAS), 0, anyGAS),
          LAX = ifelse(is.na(LAX), 0, LAX),
          ABX = ifelse(is.na(ABX), 0, ABX), 
-         DBM = ifelse(is.na(DBM), 0, DBM)) %>%
-  rename(ID = deid_enc_id)                    # Rename to ID for convenience
+         AMR = ifelse(is.na(AMR), 0, AMR)) %>%
+  rename(ID = deid_enc_id) %>%                     # Rename to ID for convenience
+  relocate(HACDIF, .before = 2)                    # Relocate HACDIF as 2nd column
 
-# df_CDI <- mutate_at(df_CDI, vars(c(readmit, age_gte_65, HACDIF, PPI, GAS, anyGAS, LAX, ABX, DBM)), factor)
+df_CDI_final <- df_CDI %>% 
+  select(-c(age, admit_time, CDIF_order_time, CDIF_result_time, discharge_time))
+
+# Old Code (keep for when join diabetes tbl)
+#df_CDI <- df %>% 
+ # left_join(meds_before, by = 'deid_enc_id') %>%   # Left join dm and med_taken_before_HACIDF
+ # left_join(dbm, by = "deid_enc_id") %>%           # Left join dm and dbm
+ # mutate(PPI = ifelse(is.na(PPI), 0, PPI),         # Reassign NA values for PPI:DBM to 0
+   #      GAS = ifelse(is.na(GAS), 0, GAS),
+   #      anyGAS = ifelse(is.na(anyGAS), 0, anyGAS),
+   #      LAX = ifelse(is.na(LAX), 0, LAX),
+   #      ABX = ifelse(is.na(ABX), 0, ABX),
+   #      AMR = ifelse(is.na(ABX), 0, AMR),
+   #      DBM = ifelse(is.na(DBM), 0, DBM)) %>%
+ # rename(ID = deid_enc_id) %>%                     # Rename to ID for convenience
+ # relocate(HACDIF, .before = 2)                    # Relocate HACDIF as 2nd column
+
+# Change all to factor vars?
+# df_CDI <- mutate_at(df_CDI, vars(c(readmit, age_gte_65, HACDIF, PPI, GAS, anyGAS, LAX, ABX, AMR)), factor)
 ```
 
 # Preview final dataset
 
-```{r Preview and explore `df_CDI`}
-str(df_CDI)
-summary(df_CDI)
+```{r Preview and explore `df_CDI_final`}
+str(df_CDI_final)
+summary(df_CDI_final)
 ```
 
-# Calculate descriptives for categorical variables in `df_CDI`
+# Calculate descriptives for categorical variables in `df_CDI_final`
 
 ```{r Create table one of descriptives}
-tableone <- CreateCatTable(data=df_CDI, vars=c("readmit", "ED_dispo", "age_gte_65", "HACDIF", "PPI", "GAS", "anyGAS", "LAX", "ABX", "DBM"))
+tableone <- CreateCatTable(data=df_CDI_final, vars=c("readmit", "ED_dispo", "age_gte_65", "HACDIF", "PPI", "GAS", "anyGAS", "LAX", "ABX", "AMR"))
+  # Edit later to include diabetes, DBM
 
 print(tableone, showAllLevels = T, noSpaces = T)
 
 # For binary variables, 1 = YES and 0 = NO. 
 ```
 
-# Save resulting dataset `df_CDI` as CSV and RDS file
+# Save resulting dataset `df_CDI_final` as CSV and RDS file
 
 ```{r Save resulting dataset as CSV and RDS}
-write_csv(df_CDI, "/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/df_CDI_risk_model.csv")
-saveRDS(df_CDI, "/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/df_CDI_risk_model.rds")
+write_csv(df_CDI_final, "/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/df_CDI_risk_model.csv")
+saveRDS(df_CDI_final, "/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/df_CDI_risk_model.rds")
 ```
