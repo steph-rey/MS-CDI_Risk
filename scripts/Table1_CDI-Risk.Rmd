@@ -63,9 +63,9 @@ str(df)
 # Assign labels to categorical variables
 
 ```{r Assign variable labels}
-label(df$HACDIF)       <- "Hospital-acquired C difficile infection"
-label(df$readmit)       <- "Readmission"
-label(df$age_gte_65)     <- "Age >= 65 years old"
+label(df$HACDIF) <- "Hospital-acquired C difficile infection"
+label(df$readmit) <- "Readmission"
+label(df$age_gte_65) <- "Age >= 65 years old"
 label(df$PPI) <- "Receipt of proton pump inhibitor (PPI)"
 label(df$GAS) <- "Receipt of gastric acid suppressant (GAS)"
 label(df$anyGAS) <- "Receipt of PPI or GAS" 
