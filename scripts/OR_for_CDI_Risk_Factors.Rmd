@@ -95,7 +95,7 @@ fisher.test(df_CDI$HACDIF, df_CDI$AMR)
 
 p\<0.05, thus, HACIF and ABX are DEPENDENT
 
-OR=29.1, meaning patients who received AMR up to one day before HAI diagnosis are 29.1 more likely to be diagnosed with HA-CDIF than those who do not receive AMR
+OR=29.6, meaning patients who received AMR up to one day before HAI diagnosis are 29.6 more likely to be diagnosed with HA-CDIF than those who do not receive AMR
 
 # Create 2x2 contingency table for GAS and CDIF and compute OR
 
