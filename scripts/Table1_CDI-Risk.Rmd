@@ -36,12 +36,12 @@ library(table1)
 library(tidyverse)
 ```
 
-# Import and preview data
+# Import and preview data; transform variables to factor type 
 
 ```{r Read in df}
 # Read in data and assign to `df`
 df <- read_csv("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/df_CDI_risk_model.csv") %>% 
-  select(-c(ID, ED_dispo)) %>%     # Exclude ED_dispo and age (continuous) for now 
+  select(-c(ID, ED_dispo)) %>%     # Exclude `ED_dispo` and `age` (continuous) for now 
   mutate_if(is.numeric, factor)
 
 # Preview dataset 
@@ -63,11 +63,11 @@ str(df)
 # Assign labels to categorical variables
 
 ```{r Assign variable labels}
-label(df$HACDIF)       <- "Hospital-acquired C difficile infection"
-label(df$readmit)       <- "Readmission"
-label(df$age_gte_65)     <- "Age >= 65 years old"
+label(df$HACDIF) <- "Hospital-acquired C difficile infection"
+label(df$readmit) <- "Readmission in last 30 days"
+label(df$age_gte_65) <- "Age >= 65 years old"
 label(df$PPI) <- "Receipt of proton pump inhibitor (PPI)"
-label(df$GAS) <- "Receipt of gastric acid suppressant (GAS)"
+label(df$GAS) <- "Receipt of antacid or H2R antagonist (GAS)"
 label(df$anyGAS) <- "Receipt of PPI or GAS" 
 label(df$LAX) <- "Receipt of laxative"
 label(df$ABX) <- "Receipt of antibiotic"
@@ -81,8 +81,8 @@ label(df$AMR) <- "Receipt of antimicrobial"
 (t1 <- table1::table1(~ . | HACDIF, 
                       data = df,
                       topclass = "Rtable1-shade",
-                      footnote = c("PPI: proton pump inhibitors", "GAS: antacids, histamine H2-receptor inhibitors", "anyGAS: proton pump inhibitors, antacids, or histamine HA2-receptor inhibitors", "LAX: laxatives and cathartics, local/rectal laxatives", "ABX: antibiotics", "AMR: antimicrobials including antibiotics, antifungals, antiinfectives, antiparasitics, antivirals"),
-                      rowlabelhead = "Positive HA C. difficile infection"))
+                      footnote = c("PPI: proton pump inhibitors", "GAS: antacids or histamine H2-receptor inhibitors", "anyGAS: proton pump inhibitors, antacids, or histamine HA2-receptor inhibitors", "LAX: laxatives and cathartics or local/rectal laxatives", "ABX: antibiotics", "AMR: antimicrobials including antibiotics, antifungals, antiinfectives, antiparasitics, and antivirals"),
+                      rowlabelhead = "Positive hospital acquired C. difficile infection"))
 
 # Re-create Table 1 with additional column for p-test of Chi Square Test testing independence between HACDIF and predictor(s) 
 # Create function to compute p-vaue for categorical (or continuous) variables
@@ -107,8 +107,8 @@ pvalue <- function(x, ...) {
                       data = df, 
                       topclass = "Rtable1-shade", 
                       extra.col = list(`P-value` = pvalue),
-                      footnote = c("PPI: proton pump inhibitors", "GAS: antacids, histamine H2-receptor inhibitors", "anyGAS: proton pump inhibitors, antacids, or histamine HA2-receptor inhibitors", "LAX: laxatives and cathartics, local/rectal laxatives", "ABX: antibiotics", "AMR: antimicrobials including antibiotics, antifungals, antiinfectives, antiparasitics, antivirals"),
-                      rowlabelhead = ""))
+                      footnote = c("PPI: proton pump inhibitors", "GAS: antacids or histamine H2-receptor inhibitors", "anyGAS: proton pump inhibitors, antacids, or histamine HA2-receptor inhibitors", "LAX: laxatives and cathartics or local/rectal laxatives", "ABX: antibiotics", "AMR: antimicrobials including antibiotics, antifungals, antiinfectives, antiparasitics, and antivirals"),
+                      rowlabelhead = "Positive hospital acquired C. difficile infection"))
 
 # Attempts to Include Footnotes: 
 #kableExtra::footnote(knitr::kable(t1.b, "html"), number = c("PPI: proton pump inhibitors", "GAS: antacids, histamine H2-receptor inhibitors", "anyGAS: proton pump inhibitors, antacids, or histamine HA2-receptor inhibitors", "LAX: laxatives and cathartics, local/rectal laxatives", "ABX: antibiotics", "AMR: antimicrobials including antibiotics, antifungals, antiinfectives, antiparasitics, antivirals", "For those not captured in ABX therapeutic class, cross-validated with a list of specific ABX and AMR names"), number_title = "Footnotes:", threeparttable = T, title_format = c("bold", "italic"))
@@ -120,15 +120,15 @@ pvalue <- function(x, ...) {
 
 -   **PPI:** proton pump inhibitors
 
--   **GAS:** antacids, histamine H2-receptor inhibitors
+-   **GAS:** antacids or histamine H2-receptor inhibitors
 
 -   **anyGAS:** proton pump inhibitors, antacids, or histamine HA2-receptor inhibitors
 
--   **LAX:** laxatives and cathartics, local/rectal laxatives
+-   **LAX:** laxatives and cathartics, or local/rectal laxatives
 
 -   **ABX\*:** antibiotics
 
--   **AMR\*:** antimicrobials including antibiotics, antifungals, antiinfectives, antiparasitics, antivirals
+-   **AMR\*:** antimicrobials including antibiotics, antifungals, antiinfectives, antiparasitics, and antivirals
 
 *\*For those not captured in ABX therapeutic class, cross-validated with a list of specific ABX and AMR names.*
 
