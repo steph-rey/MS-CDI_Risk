@@ -1,5 +1,5 @@
 ---
-title: "Univariate and Multivariate Regression Analysis Summary Tables for CDI Risk"
+title: "Univariate and Multivariate Regression Analysis Summary Tables for Hospital Acquired CDI Risk"
 author: "Steph Reynolds"
 date: "`r format(Sys.time(), '%b %d, %Y  %H:%M %p')`"
 output:
@@ -14,62 +14,73 @@ knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 
 # Background
 
-## Project 
+## Project
+
 MINDSCAPE: Modeling of infectious network dynamics for surveillance, control and prevention enhancement
 
-## Description 
-This file reads in `df.CDI` and displays univariate and multivariate regression model results in a formatted table. Both models aim to predict risk of hospital-acquired Clostridium difficile infection (HA-CDI).
+## Description
 
-# Load required packages 
+This file reads in `df_CDI_risk_model.csv` and displays univariate and multivariate regression model results in formatted, publication-ready tables. Both models aim to predict risk of hospital-acquired *Clostridioides difficile* infection (HA-CDI).
+
+# Load required packages
+
 ```{r Load required packages}
 library(tidyverse)
 library(gtsummary)
 library(performance)
 ```
 
-# Import `df_CDI_risk_model.csv` and select only necessary variables
+# Import HA-CDI dataset and transform variables to factor type
+
 ```{r Import data}
 df <- read_csv("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/df_CDI_risk_model.csv") %>% 
-  select(-c(ID, age, ED_dispo)) %>% 
+  select(-c(ID, ED_dispo)) %>% 
   mutate_if(is.numeric, factor)
 ```
 
-# Build multivariate logistic regression model and assign to `m`
-```{r Build multivariate log reg model}
-m <- glm(data = df, formula = HACDIF ~ readmit + age_gte_65 + PPI + GAS + anyGAS + LAX + ABX, family = binomial)
-summary(m)
+# Reassign levels for categorical variables
 
-m.amr <- glm(data = df, formula = HACDIF ~ readmit + age_gte_65 + PPI + GAS + anyGAS + LAX + AMR, family = binomial)
-summary(m.amr)
+```{r Convert to proper variable types }
+# Reassign levels to No and Yes for factor variables
+for (i in colnames(df)){
+   levels(df[[i]]) <- c("No", "Yes")
+}
+
+# Check structure and var types
+str(df)
 ```
 
-# Check model performance: Calculate AIC, R2, and plot ROC
-```{r Check model performance and plot ROC}
-# Check model performance (AIC, R^2)
-model_performance(m)
+# Create table of descriptive statistics
 
-# Plot ROC 
-logit_prob <- predict(m, newdata = df, type = 'response')
-logit_roc <- pROC::roc(df$HACDIF ~ logit_prob, plot = T, print.auc = T)
+```{r Table of summary statistics}
+# Set themefor gtsummary 
+theme_gtsummary_journal(journal = "jama")
+theme_gtsummary_compact()
+
+# Table of descriptive stats 
+df %>% 
+  tbl_summary(by = HACDIF, 
+              statistic = all_categorical() ~ "{n} / {N} ({p}%)",
+              label = list(readmit ~ "Readmission in last 30 days",
+                           age_gte_65 ~ "Age>=65 years old",
+                           PPI ~ "Receipt of proton pump inhibitor (PPI)",
+                           GAS ~ "Receipt of antacids or H2R antagonist (GAS)",
+                           anyGAS ~ "Receipt of GAS or PPI",
+                           LAX ~ "Receipt of laxative",
+                           ABX ~ "Receipt of antibiotic",
+                           AMR ~ "Receipt of antimicrobial")) %>% 
+  add_p() %>% 
+  add_overall() %>%
+  modify_header(label ~ "**Variable**") %>%
+  modify_spanning_header(c("stat_1", "stat_2") ~ "**Positive hospital-acquired C difficile infection**") %>%
+  modify_footnote(all_stat_cols() ~ "N (%)") %>% 
+  modify_caption("**Table 1. Patient Characteristics**") %>% 
+  as_gt()
+
 ```
 
-# Create summary table of multivariate regression model results
-```{r Summary table of multivariate regression}
-tbl_mv_reg <- tbl_regression(m, exponentiate = T,
-                          label = list(readmit ~ "Readmission in prior 30 days",
-                                       age_gte_65 ~ "Age>=65 years old",
-                                       PPI ~ "Receipt of proton pump inhibitor (PPI)",
-                                       GAS ~ "Receipt of antacids or H2R antagonist",
-                                       anyGAS ~ "Receipt of any gastric acid suppressant or PPI",
-                                       LAX ~ "Receipt of laxative",
-                                       ABX ~ "Receipt of antibiotic")) %>% 
-  add_vif() %>% 
-  bold_p()
+# Create summary table of univariate regression model results
 
-as_gt(tbl_mv_reg)
-```
-
-# Create summary table of univariate regression model results 
 ```{r Summary table of univariate regression}
 tbl_uv_reg <- df %>%
     tbl_uvregression(
@@ -78,15 +89,97 @@ tbl_uv_reg <- df %>%
     method.args = list(family = binomial),
     exponentiate = T, 
     pvalue_fun = ~style_pvalue(.x, digits = 2),
-    label = list(readmit ~ "Readmission in prior 30 days",
+    label = list(readmit ~ "Readmission in last 30 days",
                  age_gte_65 ~ "Age>=65 years old",
                  PPI ~ "Receipt of proton pump inhibitor (PPI)",
-                 GAS ~ "Receipt of antacids or H2R antagonist",
-                 anyGAS ~ "Receipt of any gastric acid suppressant or PPI",
+                 GAS ~ "Receipt of antacids or H2R antagonist (GAS)",
+                 anyGAS ~ "Receipt of GAS or PPI",
                  LAX ~ "Receipt of laxative",
-                 ABX ~ "Receipt of antibiotic")) %>% 
-  bold_p()
+                 ABX ~ "Receipt of antibiotic",
+                 AMR ~ "Receipt of antimicrobial"),
+    show_single_row = c(readmit, age_gte_65, PPI, GAS, anyGAS, LAX, ABX, AMR)) %>%
+  modify_header(list(label ~ "**Variable**"), p.value = "**P**") %>%
+  bold_p() %>% 
+  modify_caption("**Table 2. Results of Univariate Regression**")
 
 as_gt(tbl_uv_reg)
 ```
 
+# Build and compare performance of multivariate logistic regression models
+
+```{r Build multivariate log reg model}
+# FULL MODEL includes `anyGAS` and `AMR` 
+m.full <- glm(data = df, formula = HACDIF ~ readmit + age_gte_65 + PPI + GAS + anyGAS + LAX + ABX + AMR, family = binomial)
+
+# Model 1 includes `anyGAS` and `AMR` 
+m1 <- glm(data = df, formula = HACDIF ~ readmit + age_gte_65 + anyGAS + LAX + AMR, family = binomial)
+  # Summarize model output
+  summary(m1)
+  # Plot ROC 
+  logit_prob <- predict(m1, newdata = df, type = 'response')
+  logit_roc.m1 <- pROC::roc(df$HACDIF ~ logit_prob, plot = T, print.auc = T)
+
+# Model 2 includes `PPI`, `GAS`, and `ABX` 
+m2 <- glm(data = df, formula = HACDIF ~ readmit + age_gte_65 + PPI + GAS + LAX + ABX, family = binomial)
+  # Summarize model output
+  summary(m2)
+  # Plot ROC 
+  logit_prob <- predict(m2, newdata = df, type = 'response')
+  logit_roc.m2 <- pROC::roc(df$HACDIF ~ logit_prob, plot = T, print.auc = T)
+
+# Model 3 includes `PPI`, `GAS`, and `AMR` 
+m3 <- glm(data = df, formula = HACDIF ~ readmit + age_gte_65 + PPI + GAS + LAX + AMR, family = binomial)
+  # Summarize model output
+  summary(m3)
+  # Plot ROC 
+  logit_prob <- predict(m3, newdata = df, type = 'response')
+  logit_roc.m3 <- pROC::roc(df$HACDIF ~ logit_prob, plot = T, print.auc = T)
+
+# Model 4 includes `anyGAS` and `ABX` 
+m4 <- glm(data = df, formula = HACDIF ~ readmit + age_gte_65 + anyGAS + LAX + ABX, family = binomial)
+  # Summarize model output
+  summary(m4)
+  # Plot ROC 
+  logit_prob <- predict(m4, newdata = df, type = 'response')
+  logit_roc.m4 <- pROC::roc(df$HACDIF ~ logit_prob, plot = T, print.auc = T)
+  
+# Compare performance for all models (calculate AIC, BIC, Tjur's R2, RMSE, Log loss)
+m.perf <- compare_performance(m.full, m1, m2, m3, m4)
+m.perf
+```
+
+Since inherently `anyGAS` includes `GAS` and `PPI`, and `AMR` includes `ABX`, the full model does not meet the assumption that there should not be any multicollinearity. This is illustrated by the high variance inflation factor (VIF) for `AMR` and `ABX`.
+
+Looking at the other models, since model 2 has the lowest AIC but highest AUROC, we can assume that it is the best performing model.
+
+Remember, model 2 includes the following predictors: `readmit`, `age_gte_65`, `PPI`, `GAS`, `LAX`, and `ABX`.
+
+| Metric    | Value  |
+|-----------|--------|
+| AIC       | 3565.3 |
+| BIC       | 3627.7 |
+| Tjur's R2 | 0.010  |
+| RMSE      | 0.077  |
+| Log loss  | 0.032  |
+| AUROC     | 0.817  |
+
+: Performance metrics of model 2
+
+# Create summary table of multivariate regression model results
+
+```{r Summary table of multivariate regression}
+tbl_mv_reg <- tbl_regression(m2, 
+                             exponentiate = T,
+                             label = list(readmit ~ "Readmission in last 30 days",
+                                          age_gte_65 ~ "Age>=65 years old",
+                                          PPI ~ "Receipt of proton pump inhibitor (PPI)",
+                                          GAS ~ "Receipt of antacids or H2R antagonist (GAS)",
+                                          LAX ~ "Receipt of laxative",
+                                          ABX ~ "Receipt of antibiotic"), 
+                             show_single_row = c(readmit, age_gte_65, PPI, GAS, LAX, ABX)) %>%
+  modify_header(list(label ~ "**Variable**"), p.value = "**P**") %>%
+  bold_p() %>% 
+  modify_caption("**Table 3. Results of Multivariate Regression**")
+
+as_gt(tbl_mv_reg)
+```
