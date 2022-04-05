@@ -24,38 +24,34 @@ This file reads in `df.CDI` and checks the assumptions for creating a logistic r
 
 ## Outcome/Dependent Variable:
 
-*Outcome is binary.*
+*Outcome is binary, thus, logistic regression is appropriate for assessing risk.*
 
 -   `HACDIF` --\> whether patient is diagnosed with hospital- acquired C diff
-    -   In other words, whether pt obtained C diff \> 2 days after hospital admission
+    -   In other words, whether pt obtained C diff \> 48 hours after hospital admission
 
-## Predictor/Independent Variables:
+## Predictors/Independent Variables:
 
 *All predictors are binary.*
 
--   `ID` --\> each patient's unique de-identified encounter ID
+-   `ID` --\> unique de-identified encounter ID
 -   `readmit` --\> whether patient had a prior hospital admission in the last 30 days
 -   `ED_dispo` --\> whether pt was admitted from Emergency Dept (ED) ???
-    -   NOTE: UNCLEAR! VERIFY / LEO WHAT THIS SHOULD BE TO INDICATE THAT PT WAS ADMITTED TO ED!
--   `age_gte_65` --\> whether pt is aged 65 years or older at time of hospitalization
+    -   NOTE: Unclear -- verify w/ Leo what this should be to indicate that a patient was admitted to Emergency Dept.
+-   `age_gte_65` --\> whether pt is aged 65 years or older at time of admission
 -   `PPI` --\> whether pt received proton pump inhibitor (PPI) during hospital stay
 -   `GAS` --\> whether pt received gastric acid suppressants (GAS) during hospital stay
-    -   NOTE: This includes "ANTACIDS" and "HISTAMINE H2-RECEPTOR INHIBITORS"
-    -   Could this be coded as anything else in `pharm_class`?
 -   `anyGAS` --\> whether pt received PPI and/or GAS during hospital stay
 -   `LAX` --\> whether pt received laxatives (LAX) during hospital stay
-    -   NOTE: This includes "LAXATIVES AND CATHARTICS" and "LAXATIVES, LOCAL/RECTAL"
 -   `ABX` --\> whether pt received antibiotics during hospital stay
-    -   NOTE: THIS DOES NOT INCLUDE OUTPATIENT ABX - ONLY THOSE DURING HOSPITALIZATION.
 -   `DBM` --\> whether pt is diagnosed with diabetes mellitus (DBM)
-    -   NOTE: DO NOT USE! ONLY HAVE DBM DX FOR COVID POSITIVE PTS.
+    -   NOTE: Excluded as of now since we only have DBM diagnoses for Covid-positive patients.
 
 # Load required packages
 
 ```{r Load required packages}
 library(tidyverse)
-library(corrplot) #correlation matrix to test multi-collinearity of IVs 
-library(pROC) #plot ROC and calculate AUROC (to evaluate performance of model)
+library(corrplot) #plot correlation matrix to assess multicollinearity of IVs 
+library(pROC) #calculate AUROC and plot ROC
 ```
 
 # Import `df_CDI_risk_model.csv` and select only necessary variables
@@ -67,7 +63,7 @@ df <- read_csv("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/
 
 # Check Assumptions of Logistic Regression
 
-**Source: <https://www.lexjansen.com/wuss/2018/130_Final_Paper_PDF.pdf>**
+**Source:** <https://www.lexjansen.com/wuss/2018/130_Final_Paper_PDF.pdf>
 
 ## Appropriate Outcome Structure
 
@@ -79,16 +75,18 @@ Observations are independent from each other. Each patient is unique. Not matche
 
 ## Absence of Multicollinearity
 
-There should be little or no multicollinearity among IVs. We can test this assumption with a correlation matrix. Make sure no two variables have a correlation coefficient of roughly 0.8 or higher.
+There should be little or no multicollinearity among IVs. We can test this assumption with a correlation matrix. Make sure that each combination of variables has a correlation coefficient of *less than 0.80*.
 
 ### Correlation matrix
 
 ```{r Correlation matrix}
 # Create correlation matrix to check whether indep vars are correlated with each other
 corrplot(cor(df), method = 'number', type = 'lower') 
-
-# As per matrix, variables ABX and PPI are moderately correlated (correl coeff = 0.78)
 ```
+
+As per matrix, variables `ABX` and `AMR` are highly correlated (coefficent of 0.92). Thus, we should **NOT** include both of these variables in our model.
+
+Additionally, `anyGAS` and `PPI` are moderately correlated (coefficient of 0.74). We should consider including one of these variables in our model. Another measure we can use to assess multicollinearity is variance inflation factor (VIF).
 
 ## Linearity of Independent Variables and Log Odds
 
@@ -98,46 +96,49 @@ Continuous IVs must be linearly related to the logit of the outcome. We can test
 
 General guideline is to have at least 10 cases with least frequent outcome for each IV/predictor variable in your model.
 
-Since our model includes **8 predictors** and the probability of HA-CDI = 329/55037 = **0.006**, then we would like a sample size of about (10\*8/.006) = **13,334**. If we include `ED_dispo` and `DBM`, we would have 10 predictors, and thus, would aim for a sample size of about 16,667. Thus, our model easily meets this requirement.
+Since our model includes **8 predictors** and the probability of HA-CDI = 329/55,037 = **0.006**, then we would like a sample size of about (10\*7/.006) = **11,667**. If we include `ED_dispo` and `DBM`, we would have 10 predictors, and thus, would aim for a sample size of about 16,667. Thus, our model easily meets this requirement.
 
-# Build logistic regression model
+# Full model
 
-```{r Build logistic regression model}
-m <- glm(data = df, formula = HACDIF ~ readmit + age_gte_65 + PPI + GAS + anyGAS + LAX + ABX + AMR, family = binomial)
-summary(m)
+## Build logistic regression model
 
-# Model 
-m.b <- glm(data = df, formula = HACDIF ~ readmit + age_gte_65 + PPI + GAS + LAX + ABX, family = binomial(link = "cloglog"))
-summary(m.b)
+```{r Build full log reg model}
+# Full model 
+m1 <- glm(data = df, formula = HACDIF ~ readmit + age_gte_65 + PPI + GAS + anyGAS + LAX + ABX, family = binomial)
+summary(m1)
 
-m.c <- glm(data = df, formula = HACDIF ~ readmit + age_gte_65 + PPI + GAS + LAX + ABX, family = binomial)
-summary(m.c)
+# Full model without `anyGAS` - using complimentary log log (cloglog) method
+#m1c <- glm(data = df, formula = HACDIF ~ readmit + age_gte_65 + PPI + GAS + LAX + ABX, family = binomial(link = "cloglog"))
+#summary(m1c)
 ```
 
-# Calculate AUROC to evaluate model performance
+All predictors except for `anyGAS` and `LAX` were found to be significant (*p\<0.05*) in the full model.
 
-```{r Calculate AUROC}
-logit_prob <- predict(m, newdata = df, type = 'response') 
+## Calculate AUROC to evaluate performance
 
+```{r Calculate AUROC for m1}
+logit_prob <- predict(m1, newdata = df, type = 'response') 
 logit_roc <- pROC::roc(df$HACDIF ~ logit_prob, plot = T, print.auc = T)
 ```
 
-Since our model suggests `anyGAS`, `ABX`, and `AMR` to be the least significant predictors, we will re-run this model WITHOUT them.
+The **AUROC is 0.82**, indicating strong predictive value. Since our model suggests `anyGAS` and `LAX` to be the least significant predictors, we will create a second model without them.
+
+# Model 2
+
+## Build logistic regression model, excluding `anyGAS` and `LAX`
 
 ```{r Build log reg model 2}
-m2 <- glm(data = df, formula = HACDIF ~ readmit + age_gte_65 + PPI + GAS, family = binomial)
-
+m2 <- glm(data = df, formula = HACDIF ~ readmit + age_gte_65 + PPI + GAS + ABX, family = binomial)
 summary(m2)
 ```
 
-Since all predictors were significant (p\<=.05), we can keep model 2 and evaluate its performance by calculating the area under the receiving operator curve (AUROC or AUC).
+All predictors were found to be significant (*p\<0.05*) in model 2.
 
-# Calculate AUROC to evaluate model 2 performance
+## Calculate AUROC to evaluate performance
 
-```{r Calculate AUROC}
-logit_prob <- predict(m2, newdata = df, type = 'response')
-
+```{r Calculate AUROC for m2}
+logit_prob <- predict(m2, newdata = df, type = 'response') 
 logit_roc <- pROC::roc(df$HACDIF ~ logit_prob, plot = T, print.auc = T)
 ```
 
-The AUROC is 0.74 which shows that the model is fairly accurate at predicting whether a patient will be diagnosed with C diff given the following risk factors (age\>=65, readmit, and whether they received proton pump inhibitor and/or gastric acid suppressant).
+Even after excluding `anyGAS` and `LAX`, the **AUROC is 0.82**. This shows that the model is very accurate at predicting whether a patient will be diagnosed with hospital-acquired *C. difficile* given the following risk factors: older age, readmission in the last 30 days, and receipt of proton pump inhibitor, gastric acid suppressant, and/or antibiotic.
