@@ -1,5 +1,5 @@
 ---
-title: "Build Logistic Regression Model for CDI Risk"
+title: "Check Assumptions & Build Logistic Regression Model for CDI Risk"
 author: "Steph Reynolds"
 date: "`r format(Sys.time(), '%b %d, %Y  %H:%M %p')`"
 output:
