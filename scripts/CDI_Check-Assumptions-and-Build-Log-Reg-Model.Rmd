@@ -35,8 +35,7 @@ This file reads in `df.CDI` and checks the assumptions for creating a logistic r
 
 -   `ID` --\> unique de-identified encounter ID
 -   `readmit` --\> whether patient had a prior hospital admission in the last 30 days
--   `ED_dispo` --\> whether pt was admitted from Emergency Dept (ED) ???
-    -   NOTE: Unclear -- verify w/ Leo what this should be to indicate that a patient was admitted to Emergency Dept.
+-   `ED` --\> whether pt was transferred from emergency department
 -   `age_gte_65` --\> whether pt is aged 65 years or older at time of admission
 -   `PPI` --\> whether pt received proton pump inhibitor (PPI) during hospital stay
 -   `GAS` --\> whether pt received gastric acid suppressants (GAS) during hospital stay
@@ -44,7 +43,7 @@ This file reads in `df.CDI` and checks the assumptions for creating a logistic r
 -   `LAX` --\> whether pt received laxatives (LAX) during hospital stay
 -   `ABX` --\> whether pt received antibiotics during hospital stay
 -   `DBM` --\> whether pt is diagnosed with diabetes mellitus (DBM)
-    -   NOTE: Excluded as of now since we only have DBM diagnoses for Covid-positive patients.
+    -   **NOTE:** Excluded as of now since we only have DBM diagnoses for Covid-positive patients.
 
 # Load required packages
 
@@ -58,7 +57,7 @@ library(pROC) #calculate AUROC and plot ROC
 
 ```{r Import data}
 df <- read_csv("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/df_CDI_risk_model.csv") %>% 
-  select(-c(ID, ED_dispo))
+  select(-c(ID))
 ```
 
 # Check Assumptions of Logistic Regression
@@ -96,7 +95,7 @@ Continuous IVs must be linearly related to the logit of the outcome. We can test
 
 General guideline is to have at least 10 cases with least frequent outcome for each IV/predictor variable in your model.
 
-Since our model includes **8 predictors** and the probability of HA-CDI = 329/55,037 = **0.006**, then we would like a sample size of about (10\*7/.006) = **11,667**. If we include `ED_dispo` and `DBM`, we would have 10 predictors, and thus, would aim for a sample size of about 16,667. Thus, our model easily meets this requirement.
+Since our model includes **9 predictors** and the probability of HA-CDI = 329/55,037 = **0.006**, then we would like a sample size of about (9\*7/.006) = **10,539**. If we later include `DBM`, we would have 10 predictors, and thus, would aim for a sample size of about 11,710. Thus, our model easily meets this requirement.
 
 # Full model
 
@@ -104,28 +103,30 @@ Since our model includes **8 predictors** and the probability of HA-CDI = 329/55
 
 ```{r Build full log reg model}
 # Full model 
-m1 <- glm(data = df, formula = HACDIF ~ readmit + age_gte_65 + PPI + GAS + anyGAS + LAX + ABX, family = binomial)
+m1 <- glm(data = df, formula = HACDIF ~ readmit + age_gte_65 + ED + PPI + GAS + anyGAS + LAX + ABX, family = binomial)
 summary(m1)
 
 # Full model without `anyGAS` - using complimentary log log (cloglog) method
-#m1c <- glm(data = df, formula = HACDIF ~ readmit + age_gte_65 + PPI + GAS + LAX + ABX, family = binomial(link = "cloglog"))
+#m1c <- glm(data = df, formula = HACDIF ~ readmit + age_gte_65 + ED + PPI + GAS + LAX + ABX, family = binomial(link = "cloglog"))
 #summary(m1c)
 ```
 
-All predictors except for `anyGAS` and `LAX` were found to be significant (*p\<0.05*) in the full model.
+-   The following predictors were found to be **significant** (p\>0.05) in the full model: `readmit`, `age_gte_65`, `PPI`, `GAS`, and `ABX`.
 
-## Calculate AUROC to evaluate performance
+-   These predictors were **NOT** found to be significant: `ED` (p=0.93), `anyGAS` (p=0.80), and `LAX` (p=0.35).
+
+    ## Calculate AUROC to evaluate performance
 
 ```{r Calculate AUROC for m1}
 logit_prob <- predict(m1, newdata = df, type = 'response') 
 logit_roc <- pROC::roc(df$HACDIF ~ logit_prob, plot = T, print.auc = T)
 ```
 
-The **AUROC is 0.82**, indicating strong predictive value. Since our model suggests `anyGAS` and `LAX` to be the least significant predictors, we will create a second model without them.
+The **AUROC is 0.82**, indicating strong predictive value. Since our model suggests `ED`, `anyGAS`, and `LAX` to be the least significant predictors, we will create a second model without them.
 
 # Model 2
 
-## Build logistic regression model, excluding `anyGAS` and `LAX`
+## Build logistic regression model, excluding `ED`, `anyGAS`, and `LAX`
 
 ```{r Build log reg model 2}
 m2 <- glm(data = df, formula = HACDIF ~ readmit + age_gte_65 + PPI + GAS + ABX, family = binomial)
@@ -141,4 +142,4 @@ logit_prob <- predict(m2, newdata = df, type = 'response')
 logit_roc <- pROC::roc(df$HACDIF ~ logit_prob, plot = T, print.auc = T)
 ```
 
-Even after excluding `anyGAS` and `LAX`, the **AUROC is 0.82**. This shows that the model is very accurate at predicting whether a patient will be diagnosed with hospital-acquired *C. difficile* given the following risk factors: older age, readmission in the last 30 days, and receipt of proton pump inhibitor, gastric acid suppressant, and/or antibiotic.
+Even after excluding `ED`, `anyGAS`, and `LAX`, the **AUROC is 0.82**. This shows that the model is very accurate at predicting whether a patient will be diagnosed with hospital-acquired *C. difficile* given the following risk factors: readmission in the last 30 days, older age, and receipt of proton pump inhibitor, gastric acid suppressant, and/or antibiotics.

@@ -41,7 +41,7 @@ library(tidyverse)
 ```{r Read in df}
 # Read in data and assign to `df`
 df <- read_csv("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/df_CDI_risk_model.csv") %>% 
-  select(-c(ID, ED_dispo)) %>%     # Exclude `ED_dispo` and `age` (continuous) for now 
+  select(-ID) %>%     # Exclude `ID`
   mutate_if(is.numeric, factor)
 
 # Preview dataset 
@@ -66,6 +66,7 @@ str(df)
 label(df$HACDIF) <- "Hospital-acquired C difficile infection"
 label(df$readmit) <- "Readmission in last 30 days"
 label(df$age_gte_65) <- "Age >= 65 years old"
+label(df$ED) <- "Transfer from Emergency Department"
 label(df$PPI) <- "Receipt of proton pump inhibitor (PPI)"
 label(df$GAS) <- "Receipt of antacid or H2R antagonist (GAS)"
 label(df$anyGAS) <- "Receipt of PPI or GAS" 
@@ -116,7 +117,7 @@ pvalue <- function(x, ...) {
 #kableExtra::add_footnote(knitr::kable(t1.b, "html"), label = c("PPI: proton pump inhibitors", "GAS: antacids, histamine H2-receptor inhibitors", "anyGAS: proton pump inhibitors, antacids, or histamine HA2-receptor inhibitors", "LAX: laxatives and cathartics, local/rectal laxatives", "ABX: antibiotics", "AMR: antimicrobials including antibiotics, antifungals, antiinfectives, antiparasitics, antivirals", "For those not captured in ABX therapeutic class, cross-validated with a list of specific ABX and AMR names"), notation = "number", threeparttable = T)
 ```
 
-# Information for Table 1 footnotes:
+# Information for Table 1 footnotes
 
 -   **PPI:** proton pump inhibitors
 
@@ -132,7 +133,7 @@ pvalue <- function(x, ...) {
 
 *\*For those not captured in ABX therapeutic class, cross-validated with a list of specific ABX and AMR names.*
 
-## Other Important Definitions
+## Other important definitions
 
 -   For patients with positive CDI culture, receipt of medications were coded as those received from time of admission to 1 day before CDI culture was ordered. For example, if a patient was admitted on 03-01-2021 and had a positive CDI culture ordered on 03-15-2021, his/her receipt of medications through 03-14-2021 were considered.
 

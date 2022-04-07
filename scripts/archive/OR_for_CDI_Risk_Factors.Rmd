@@ -20,7 +20,7 @@ MINDSCAPE: Modeling of infectious network dynamics for surveillance, control and
 
 ## Description
 
-This file reads in `df.CDI which contains binary variables or risk factors associated with hospital-acquired C difficile (HA-CDIF) and computes the odds ratios for each risk factor. Variables include:
+This file reads in \`df.CDI which contains binary variables or risk factors associated with hospital-acquired C difficile (HA-CDIF) and computes the odds ratios for each risk factor. Variables include:
 
 -   `ID` --\> each patient's unique de-identified encounter ID
 -   `readmit` --\> whether patient had a prior hospital admission in the last 30 days
@@ -45,6 +45,7 @@ library(tidyverse)
 ```
 
 # Read in `df_CDI`
+
 ```{r Read in data}
 df_CDI <- readRDS("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/df_CDI_risk_model.rds")
 ```
@@ -175,5 +176,20 @@ fisher.test(df_CDI$HACDIF, df_CDI$readmit)
 
 p\<0.05, thus, HACIF and PPI are DEPENDENT
 
-OR=1.92, meaning patients who were readmitted are 1.92 more likely to be diagnosed with HA-CDIF than those who were not 
+OR=1.92, meaning patients who were readmitted are 1.92 more likely to be diagnosed with HA-CDIF than those who were not
 
+# Create 2x2 contingency table for ED and CDIF and compute OR
+
+```{r Contingency table and OR for ED and CDIF}
+table(df_CDI$HACDIF, df_CDI$ED)
+
+chisq.test(df_CDI$HACDIF, df_CDI$ED)
+
+fisher.test(df_CDI$HACDIF, df_CDI$ED)
+```
+
+**Results:**
+
+p\>0.05, thus, HACIF and ER are INDEPENDENT
+
+OR=1.20 (95% CI: 0.94-1.51), meaning patients who transferred from the Emergency Department are no more likely to be diagnosed with HA-CDIF than those who were admitted directly

@@ -24,21 +24,21 @@ This file reads in necessary data and identifies variables of interest for build
 
 -   `ID` --\> each patient's unique de-identified encounter ID
 -   `readmit` --\> whether patient had a prior hospital admission in the last 30 days
--   `ED_dispo` --\> whether pt was admitted from Emergency Dept (ED) ???
-    -   NOTE: UNCLEAR! VERIFY / LEO WHAT THIS SHOULD BE TO INDICATE THAT PT WAS ADMITTED TO ED!
+-   `ED` --\> whether pt was transferred from Emergency Department 
+    -   NOTE: This includes where `ED_dispo` %in% c("Admit", "Observation", "OR Admit", "Send to L&R").
 -   `age_gte_65` -\> whether pt is aged 65 years or older at time of hospitalization
 -   `PPI` --\> whether pt received proton pump inhibitor (PPI) during hospital stay
 -   `GAS` --\> whether pt received gastric acid suppressants (GAS) during hospital stay
-    -   NOTE: This includes "ANTACIDS" and "HISTAMINE H2-RECEPTOR INHIBITORS"
+    -   NOTE: This includes "ANTACIDS" and "HISTAMINE H2-RECEPTOR INHIBITORS".
 -   `anyGAS` --\> whether pt received PPI and/or GAS during hospital stay
 -   `LAX` --\> whether pt received laxatives (LAX) during hospital stay
-    -   NOTE: This includes "LAXATIVES AND CATHARTICS" and "LAXATIVES, LOCAL/RECTAL"
+    -   NOTE: This includes "LAXATIVES AND CATHARTICS" and "LAXATIVES, LOCAL/RECTAL".
 -   `ABX` --\> whether pt received antibiotics during hospital stay
-    -   For pts with a positive CDIF culture, only count ABX received up to day prior to `order_time`. For pts without CDI, count abx from time of admission to discharge.
+    -   For pts with a positive CDIF culture, only count ABX received up to day prior to `order_time`. For pts without CDI, count ABX from time of admission to discharge.
 -   `AMR` -\> whether pt received antimicrobials during hospital stay
-    -   For pts with a positive CDIF culture, only count AMR received up to day prior to `order_time`. For pts without CDI, count abx from time of admission to discharge.
+    -   For pts with a positive CDIF culture, only count AMR received up to day prior to `order_time`. For pts without CDI, count AMR from time of admission to discharge.
 -   `DBM` --\> whether pt is diagnosed with diabetes mellitus (DBM)
-    -   NOTE: DO NOT USE! ONLY HAVE DBM DX FOR COVID-POSITIVE PTS.
+    -   NOTE: DO NOT USE IN CURRENT STATE! ONLY HAVE DBM DX FOR COVID-POSITIVE PTS.
 
 # Load required packages
 
@@ -49,12 +49,10 @@ library(tableone) # create categorical tables
 library(DescTools) # %like% operator
 ```
 
-# Import `dm`, `med`, and `lab` tables and select only necessary variables
+# Import `dm`, `dx`, and `lab` tables and select only necessary variables
 
 ```{r Import data, message = F}
 dm <- read_delim("/Users/sreynolds2/Downloads/ucsf_data_pull_11.08.21/demographics and event table 11.08.21.csv", delim = "|")
-
-#med <- read_delim("/Users/sreynolds2/Downloads/ucsf_data_pull_11.08.21/med admin table 11.08.21.csv", delim = "|") %>% select(deid_enc_id, name, thera_class, pharm_class, taken_time)
 
 lab <- read_delim("/Users/sreynolds2/Downloads/ucsf_data_pull_11.08.21/lab results 11.08.21.csv", delim = "|") %>% select(deid_enc_id, COMPONENT_ID, Abnormal, ORD_VALUE, order_time, RESULT_TIME, lab_concept)
 
@@ -83,7 +81,7 @@ cdif_pts <- lab %>%
          CDIF_result_time = RESULT_TIME)
 ```
 
-# Join `dm` and `cdif_pts` tables and create new vars to indicate age\>=65, readmit status, and hospital-acquired CDIF
+# Join `dm` and `cdif_pts` tables and create new vars to indicate age\>=65, readmit status, ED transfer status, and hospital-acquired CDIF
 
 **\*Note:** Hospital-acquired CDIF (`HACDIF`) is defined as those with CDIF orders (`CDIF_order_time`) more than 48 hours after admission (`admit_time`).
 
@@ -95,7 +93,8 @@ df <- dm %>%
   mutate_at(c("readmit", "ED_dispo"), factor) %>%
   mutate(age_gte_65 = if_else(age>=65, 1, 0),
          readmit = if_else(readmit=="Yes", 1, 0),
-         HACDIF = case_when((difftime(CDIF_order_time, admit_time, units = "hours")) > 48 ~ 1, TRUE ~ 0))
+         HACDIF = case_when((difftime(CDIF_order_time, admit_time, units = "hours")) > 48 ~ 1, TRUE ~ 0),
+         ED = if_else(ED_dispo %in% c("Admit", "Observation", "OR Admit", "Send to L&D"), 1, 0))
 
 # Calculate proportion of encounter IDs with HACDIF 
 cat("Proportion of total encounter IDs with hospital-acquired CDIF:",
@@ -105,6 +104,9 @@ cat("Proportion of total encounter IDs with hospital-acquired CDIF:",
 # Create binary variables to indicate whether patients received PPI, GAS, LAX, and/or ABX; assign to table `med2`
 
 ```{r Create binary vars to indicate whether pts received PPI, GAS, LAX, ABX, eval = F}
+# Read in `med admin` table and select only necessary variables 
+med <- read_delim("/Users/sreynolds2/Downloads/ucsf_data_pull_11.08.21/med admin table 11.08.21.csv", delim = "|") %>% select(deid_enc_id, name, thera_class, pharm_class, taken_time)
+
 # Vector of antibiotic names - not captured by filtering thera_class=='ANTIBIOTICS' since thera_class=='NULL'
 names_abx <- "VANCOMYCIN|CEFTRIAXONE|CEFEPIME|LEVOFLOXACIN|CIPROFLOXACIN|AMIKACIN|GENTAMICIN|NEOMYCIN-POLYMYXIN|TOBRAMYCIN|ERTAPENEM|IMIPENEM-CILASTATIN|MEROPENEM|MEROPENEM-VABORBACTAM|CEFAZOLIN|CEFOXITIN|CEFOTETAN|CEFUROXIME|CEFTAZIDIME|CEFTAROLINE|TOBRAMYCIN|DALBAVANCIN|ORITAVANCIN|CLINDAMYCIN|DAPTOMYCIN|AZITHROMYCIN|ERYTHROMYCIN|AZTREONAM|LINEZOLID|AMPICILLIN|AMPICILLIN-SULBACTAM|NAFCILLIN|PENICILLIN|PIPERACILLIN-TAZOBACTAM|BACITRACIN|NEOMYCIN-POLYMYXIN|GENTAMICIN-POLYMYXIN|TRIMETHOPRIM-SULFAMETHOXAZOLE|SULFAMETHOXAZOLE-TRIMETHOPRIM|DOXYCYCLINE|MINOCYCLINE|CLOFAZIMINE|ISONIAZID|RIFAMPIN|TIGECYCLINE|TRIMETHOPRIM|AZTREONAM|GENTAMICIN|CEFTOLOZANE-TAZOBACTAM|CLINDAMYCIN|ALBAVANCIN|ERAVACYCLINE|GENTAMICIN-POLYMYXIN|CEFAZOLIN/CEFTAZIDIME|ORITAVANCIN|PENICILLIN|TEDIZOID|CEFIDEROCOL|COLISTIMETHATE"
 
@@ -131,8 +133,6 @@ saveRDS(meds_binary, "/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk
 ```
 
 # Create `med_taken_before_HAI` table to indicate whether pt received PPI, GAS, ABX, or AMR up to one day before CDIF_order_time
-
-**NOTE TO SELF:** Need to edit this section so that all ABX/PPI/GAS are counted, regardless of whether they were received up to one day before `CDIF_order_time`. Need to edit filter (line 3).
 
 ```{r Create `med_taken_before_HAI` table, eval = F}
 # Read in `meds_binary` table 
@@ -200,7 +200,7 @@ dbm <- dx %>%
 # Read in `meds_before_order_or_disc` 
 meds_before <- readRDS("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/meds_before_order_or_disc.rds")
 
-# Updated Code from 3/31/2022
+# Merge all tables and re-assign NA values to 0 
 df_CDI <- df %>% 
   left_join(meds_before, by = 'deid_enc_id') %>%   # Left join dm and meds_before
   mutate(PPI = ifelse(is.na(PPI), 0, PPI),         # Reassign NA values for PPI:AMR to 0
@@ -212,8 +212,9 @@ df_CDI <- df %>%
   rename(ID = deid_enc_id) %>%                     # Rename to ID for convenience
   relocate(HACDIF, .before = 2)                    # Relocate HACDIF as 2nd column
 
+# Deselect unnecessary variables 
 df_CDI_final <- df_CDI %>% 
-  select(-c(age, admit_time, CDIF_order_time, CDIF_result_time, discharge_time))
+  select(-c(age, ED_dispo, admit_time, CDIF_order_time, CDIF_result_time, discharge_time))
 
 # Old Code (keep for when join diabetes tbl)
 #df_CDI <- df %>% 
@@ -235,25 +236,14 @@ df_CDI_final <- df_CDI %>%
 
 # Preview final dataset
 
-```{r Preview and explore `df_CDI_final`}
+```{r Preview final dataset}
 str(df_CDI_final)
 summary(df_CDI_final)
 ```
 
-# Calculate descriptives for categorical variables in `df_CDI_final`
-
-```{r Create table one of descriptives}
-tableone <- CreateCatTable(data=df_CDI_final, vars=c("readmit", "ED_dispo", "age_gte_65", "HACDIF", "PPI", "GAS", "anyGAS", "LAX", "ABX", "AMR"))
-  # Edit later to include diabetes, DBM
-
-print(tableone, showAllLevels = T, noSpaces = T)
-
-# For binary variables, 1 = YES and 0 = NO. 
-```
-
 # Save resulting dataset `df_CDI_final` as CSV and RDS file
 
-```{r Save resulting dataset as CSV and RDS}
+```{r Save resulting dataset as CSV and RDS, eval = F}
 write_csv(df_CDI_final, "/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/df_CDI_risk_model.csv")
 saveRDS(df_CDI_final, "/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/df_CDI_risk_model.rds")
 ```

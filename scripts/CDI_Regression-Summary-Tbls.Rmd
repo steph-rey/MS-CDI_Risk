@@ -34,7 +34,7 @@ library(performance)
 
 ```{r Import data}
 df <- read_csv("/Users/sreynolds2/Documents/GitHub/MS-CDI_Risk/MS-CDI_Risk/data/clean/df_CDI_risk_model.csv") %>% 
-  select(-c(ID, ED_dispo)) %>% 
+  select(-ID) %>% 
   mutate_if(is.numeric, factor)
 ```
 
@@ -53,7 +53,7 @@ str(df)
 # Create table of descriptive statistics
 
 ```{r Table of summary statistics}
-# Set themefor gtsummary 
+# Set theme for gtsummary 
 theme_gtsummary_journal(journal = "jama")
 theme_gtsummary_compact()
 
@@ -63,6 +63,7 @@ df %>%
               statistic = all_categorical() ~ "{n} / {N} ({p}%)",
               label = list(readmit ~ "Readmission in last 30 days",
                            age_gte_65 ~ "Age>=65 years old",
+                           ED ~ "Transfer from Emergency Department",
                            PPI ~ "Receipt of proton pump inhibitor (PPI)",
                            GAS ~ "Receipt of antacids or H2R antagonist (GAS)",
                            anyGAS ~ "Receipt of GAS or PPI",
@@ -91,13 +92,14 @@ tbl_uv_reg <- df %>%
     pvalue_fun = ~style_pvalue(.x, digits = 2),
     label = list(readmit ~ "Readmission in last 30 days",
                  age_gte_65 ~ "Age>=65 years old",
+                 ED ~ "Transfer from Emergency Department",
                  PPI ~ "Receipt of proton pump inhibitor (PPI)",
                  GAS ~ "Receipt of antacids or H2R antagonist (GAS)",
                  anyGAS ~ "Receipt of GAS or PPI",
                  LAX ~ "Receipt of laxative",
                  ABX ~ "Receipt of antibiotic",
                  AMR ~ "Receipt of antimicrobial"),
-    show_single_row = c(readmit, age_gte_65, PPI, GAS, anyGAS, LAX, ABX, AMR)) %>%
+    show_single_row = c(readmit, age_gte_65, ED, PPI, GAS, anyGAS, LAX, ABX, AMR)) %>%
   modify_header(list(label ~ "**Variable**"), p.value = "**P**") %>%
   bold_p() %>% 
   modify_caption("**Table 2. Results of Univariate Regression**")
@@ -108,10 +110,13 @@ as_gt(tbl_uv_reg)
 # Build and compare performance of multivariate logistic regression models
 
 ```{r Build multivariate log reg model}
-# FULL MODEL includes `anyGAS` and `AMR` 
-m.full <- glm(data = df, formula = HACDIF ~ readmit + age_gte_65 + PPI + GAS + anyGAS + LAX + ABX + AMR, family = binomial)
+# FULL MODEL includes ALL predictors 
+m.full <- glm(data = df, formula = HACDIF ~ readmit + age_gte_65 + ED + PPI + GAS + anyGAS + LAX + ABX + AMR, family = binomial)
+summary(m.full)
 
-# Model 1 includes `anyGAS` and `AMR` 
+  # ED is not a signficant predictor, so we can remove it from our model. 
+
+# Model 1 excludes ED, PPI, GAS, ABX
 m1 <- glm(data = df, formula = HACDIF ~ readmit + age_gte_65 + anyGAS + LAX + AMR, family = binomial)
   # Summarize model output
   summary(m1)
@@ -119,7 +124,7 @@ m1 <- glm(data = df, formula = HACDIF ~ readmit + age_gte_65 + anyGAS + LAX + AM
   logit_prob <- predict(m1, newdata = df, type = 'response')
   logit_roc.m1 <- pROC::roc(df$HACDIF ~ logit_prob, plot = T, print.auc = T)
 
-# Model 2 includes `PPI`, `GAS`, and `ABX` 
+# Model 2 excludes ED, anyGAS, AMR
 m2 <- glm(data = df, formula = HACDIF ~ readmit + age_gte_65 + PPI + GAS + LAX + ABX, family = binomial)
   # Summarize model output
   summary(m2)
@@ -127,7 +132,7 @@ m2 <- glm(data = df, formula = HACDIF ~ readmit + age_gte_65 + PPI + GAS + LAX +
   logit_prob <- predict(m2, newdata = df, type = 'response')
   logit_roc.m2 <- pROC::roc(df$HACDIF ~ logit_prob, plot = T, print.auc = T)
 
-# Model 3 includes `PPI`, `GAS`, and `AMR` 
+# Model 3 excludes ED, anyGAS, ABX
 m3 <- glm(data = df, formula = HACDIF ~ readmit + age_gte_65 + PPI + GAS + LAX + AMR, family = binomial)
   # Summarize model output
   summary(m3)
@@ -135,7 +140,7 @@ m3 <- glm(data = df, formula = HACDIF ~ readmit + age_gte_65 + PPI + GAS + LAX +
   logit_prob <- predict(m3, newdata = df, type = 'response')
   logit_roc.m3 <- pROC::roc(df$HACDIF ~ logit_prob, plot = T, print.auc = T)
 
-# Model 4 includes `anyGAS` and `ABX` 
+# Model 4 excludes ED, PPI, GAS, AMR
 m4 <- glm(data = df, formula = HACDIF ~ readmit + age_gte_65 + anyGAS + LAX + ABX, family = binomial)
   # Summarize model output
   summary(m4)
@@ -143,27 +148,36 @@ m4 <- glm(data = df, formula = HACDIF ~ readmit + age_gte_65 + anyGAS + LAX + AB
   logit_prob <- predict(m4, newdata = df, type = 'response')
   logit_roc.m4 <- pROC::roc(df$HACDIF ~ logit_prob, plot = T, print.auc = T)
   
+# Model 5 excludes ED, anyGAS, LAX, AMR 
+m5 <- glm(data = df, formula = HACDIF ~ readmit + age_gte_65 + PPI + GAS + ABX, family = binomial)
+  # Summarize model output
+  summary(m5)
+  # Plot ROC 
+  logit_prob <- predict(m5, newdata = df, type = 'response')
+  logit_roc.m5 <- pROC::roc(df$HACDIF ~ logit_prob, plot = T, print.auc = T)
+  
 # Compare performance for all models (calculate AIC, BIC, Tjur's R2, RMSE, Log loss)
-m.perf <- compare_performance(m.full, m1, m2, m3, m4)
-m.perf
+    # Set rank=T to order by highest performing model
+m.performance <- compare_performance(m.full, m1, m2, m3, m4, m5, rank = T, metrics = "common")
+m.performance
 ```
 
-Since inherently `anyGAS` includes `GAS` and `PPI`, and `AMR` includes `ABX`, the full model does not meet the assumption that there should not be any multicollinearity. This is illustrated by the high variance inflation factor (VIF) for `AMR` and `ABX`.
+### Summary
 
-Looking at the other models, since model 2 has the lowest AIC but highest AUROC, we can assume that it is the best performing model.
+-   Since inherently `anyGAS` includes `GAS` and `PPI`, and `AMR` includes `ABX`, the full model has an issue with multicollinearity. This is illustrated by the high variance inflation factor (VIF) for `AMR` and `ABX`.
 
-Remember, model 2 includes the following predictors: `readmit`, `age_gte_65`, `PPI`, `GAS`, `LAX`, and `ABX`.
+-   When comparing all models, since model 5 has the lowest AIC/BIC but highest AUROC and adjusted R\^2, we can assume that it is the best performing.
+
+-   Model 5 includes the following predictors: `readmit`, `age_gte_65`, `PPI`, `GAS`, and `ABX`. We removed `ED` and `LAX` since they were not significant (p\>.05), as well as `anyGAS` and `AMR` due to multicollinearity as mentioned above.
+
+#### *Performance Metrics of Model 5*
 
 | Metric    | Value  |
 |-----------|--------|
-| AIC       | 3565.3 |
-| BIC       | 3627.7 |
+| AIC       | 3564.2 |
 | Tjur's R2 | 0.010  |
 | RMSE      | 0.077  |
-| Log loss  | 0.032  |
 | AUROC     | 0.817  |
-
-: Performance metrics of model 2
 
 # Create summary table of multivariate regression model results
 
